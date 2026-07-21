@@ -1,2 +1,4 @@
 # rpemotemenu
-RP Emote Menu addon for World Of Warcraft
+
+RP Emote Menu addon for World Of Warcraft (WOW)
+
