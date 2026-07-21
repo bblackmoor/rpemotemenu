@@ -1,0 +1,22 @@
+## Interface: 120007
+## Title: RP Emote Menu
+## Notes: Collapsible, scrollable RP quick emote menu.
+## Author: Brandon Blackmoor <bblackmoor@blackgate.net>
+## Version: 1.0
+
+## Category-enUS: Roleplay
+## Category-deDE: Rollenspiel
+## Category-esES: Juego de rol
+## Category-esMX: Juego de rol
+## Category-frFR: Jeu de rôle
+## Category-itIT: Gioco di Ruolo
+## Category-koKR: 롤플레잉
+## Category-ptBR: Interpretação de Papel
+## Category-ruRU: Ролевая игра
+## Category-zhCN: 角色扮演
+## Category-zhTW: 角色扮演
+
+## X-License: GPL-3.0
+## X-Website: https://github.com/bblackmoor/rpemotemenu/
+
+RP_Emote_Menu.lua
