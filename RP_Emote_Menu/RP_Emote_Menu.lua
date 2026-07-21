@@ -183,7 +183,21 @@ local CollapseBtn = CreateFrame("Button", nil, MainFrame, "UIPanelButtonTemplate
 CollapseBtn:SetSize(22, 20)
 CollapseBtn:SetPoint("TOPRIGHT", MainFrame, "TOPRIGHT", -5, -5)
 
+local function AnchorFrameByTopLeft()
+    local left = MainFrame:GetLeft()
+    local top = MainFrame:GetTop()
+
+    if left and top then
+        MainFrame:ClearAllPoints()
+        MainFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+    end
+end
+
 local function UpdateWindowCollapse()
+    -- Re-anchor by the top-left corner so changing the height moves only
+    -- the bottom edge. The title bar therefore stays in place.
+    AnchorFrameByTopLeft()
+
     if isWindowCollapsed then
         ScrollFrame:Hide()
         MainFrame:SetHeight(collapsedHeight)
