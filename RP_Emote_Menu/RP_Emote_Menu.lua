@@ -60,7 +60,7 @@ MainFrame:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
 -- Title Bar
 local Title = MainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 Title:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 10, -10)
-Title:SetText("RP Quick Emotes")
+Title:SetText("RP Emote Menu")
 Title:SetTextColor(1, 1, 1, 1)
 
 
@@ -88,7 +88,7 @@ local function GetContainerButton()
     btn:SetSize(210, 22)
     
     btn.Text = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    btn.Text:SetPoint("LEFT", btn, "LEFT", 10, 0)
+    btn.Text:SetPoint("LEFT", btn, "LEFT", 22, 0)
     
     table.insert(buttonsPool, btn)
     return btn
@@ -133,7 +133,12 @@ local function UpdateMenu()
 
     for _, sectionName in ipairs(sectionOrder) do
         local isExpanded = expandedStates[sectionName]
-        local marker = isExpanded and "- " or "+ "
+        local marker
+        if isExpanded then
+            marker = "|TInterface\\Buttons\\UI-MinusButton-Up:16:16:0:0|t "
+        else
+            marker = "|TInterface\\Buttons\\UI-PlusButton-Up:16:16:0:0|t "
+        end
 
         local header = GetContainerButton()
         header:ClearAllPoints()
