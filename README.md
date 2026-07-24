@@ -13,7 +13,7 @@ a different command when another unit is targeted.
 -   Up to **5 customizable categories**
 -   Up to **10 emotes per category**
 -   Editable category names, button labels, and commands from the
-    in-game Settings panel
+    in-game Options panel
 -   Optional targeted commands using `{target}`, `{target-full}`,
     `{player}`, and `{player-full}`
 -   Collapsible, resizable, and lockable window
