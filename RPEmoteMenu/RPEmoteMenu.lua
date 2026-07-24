@@ -686,13 +686,16 @@ local function CreateLabeledEditBox(
     emoteIndex,
     fieldName
 )
+    local labelWidth = 180
     local label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    label:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    label:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y - 5)
+    label:SetWidth(labelWidth)
+    label:SetJustifyH("LEFT")
     label:SetText(labelText)
 
     local editBox = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
     editBox:SetSize(width, 24)
-    editBox:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 4, -3)
+    editBox:SetPoint("TOPLEFT", parent, "TOPLEFT", x + labelWidth, y)
     editBox:SetAutoFocus(false)
     editBox:SetFont(STANDARD_TEXT_FONT, 12, "")
     editBox:SetTextColor(1, 1, 1, 1)
@@ -849,7 +852,7 @@ local function CreateCategorySettingsPanel(categoryIndex)
     scrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -28, 4)
 
     local content = CreateFrame("Frame", nil, scrollFrame)
-    content:SetSize(700, 2300)
+    content:SetSize(700, 1500)
     scrollFrame:SetScrollChild(content)
 
     local heading = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -858,19 +861,21 @@ local function CreateCategorySettingsPanel(categoryIndex)
 
     local resetButton = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
     resetButton:SetSize(190, 24)
-    resetButton:SetPoint("TOPLEFT", content, "TOPLEFT", 16, -48)
+    resetButton:SetPoint("TOPRIGHT", content, "TOPRIGHT", -90, -12)
     resetButton:SetText("Reset Category to Defaults")
     resetButton:SetScript("OnClick", function()
         ResetCategoryToDefaults(categoryIndex)
     end)
 
     local placeholderText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    placeholderText:SetPoint("TOPLEFT", resetButton, "BOTTOMLEFT", 0, -12)
+    placeholderText:SetPoint("TOPLEFT", content, "TOPLEFT", 16, -50)
     placeholderText:SetWidth(630)
     placeholderText:SetJustifyH("LEFT")
     placeholderText:SetText(
-        "Placeholders:  {target} target name;  {target-full} target and realm;  " ..
-        "{player} your name;  {player-full} your name and realm.  " ..
+        "{target} - Target's name without the realm.\n" ..
+        "{target-full} - Target's name including the realm.\n" ..
+        "{player} - Your character's name without the realm.\n" ..
+        "{player-full} - Your character's name including the realm.\n\n" ..
         "Targeted Command is used only when another unit is targeted."
     )
     placeholderText:SetTextColor(0.8, 0.8, 0.8)
@@ -883,14 +888,14 @@ local function CreateCategorySettingsPanel(categoryIndex)
         "Category Name",
         16,
         y,
-        300,
+        420,
         categoryIndex,
         nil,
         "name"
     )
     table.insert(editors, nameBox)
 
-    y = y - 82
+    y = y - 28
 
     for emoteIndex = 1, 10 do
         local emoteNumber = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -901,8 +906,8 @@ local function CreateCategorySettingsPanel(categoryIndex)
             content,
             "Emote Label",
             48,
-            y - 22,
-            270,
+            y - 20,
+            390,
             categoryIndex,
             emoteIndex,
             "label"
@@ -912,8 +917,8 @@ local function CreateCategorySettingsPanel(categoryIndex)
             content,
             "Default Command",
             48,
-            y - 74,
-            570,
+            y - 48,
+            390,
             categoryIndex,
             emoteIndex,
             "defaultCommand"
@@ -923,8 +928,8 @@ local function CreateCategorySettingsPanel(categoryIndex)
             content,
             "Targeted Command (optional)",
             48,
-            y - 126,
-            570,
+            y - 76,
+            390,
             categoryIndex,
             emoteIndex,
             "targetedCommand"
@@ -934,10 +939,10 @@ local function CreateCategorySettingsPanel(categoryIndex)
         table.insert(editors, defaultBox)
         table.insert(editors, targetedBox)
 
-        y = y - 188
+        y = y - 116
     end
 
-    content:SetHeight(-y + 30)
+    content:SetHeight(-y + 20)
 
     panel.RefreshEditors = function()
         for _, editBox in ipairs(editors) do
