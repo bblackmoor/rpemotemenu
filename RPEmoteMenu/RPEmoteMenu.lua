@@ -95,7 +95,9 @@ local defaults = {
     point = "CENTER",
     relativePoint = "CENTER",
     x = 0,
-    y = 100
+    y = 100,
+    width = 250,
+    height = 350
 }
 
 local emoteAliases = {
@@ -103,13 +105,17 @@ local emoteAliases = {
     ty = "THANK"
 }
 
-local expandedHeight = 350
 local collapsedHeight = 30
+local minimumWidth = 190
+local minimumHeight = 180
+local maximumWidth = 600
+local maximumHeight = 800
 
 local MainFrame
 local ScrollFrame
 local ScrollChild
 local CollapseBtn
+local ResizeGrip
 local settingsCategory
 local buttonsPool = {}
 local isWindowCollapsed = false
@@ -145,16 +151,47 @@ local function SaveWindowPosition()
     RPEmoteMenuDB.y = y
 end
 
+local function SaveWindowSize()
+    if not isWindowCollapsed then
+        RPEmoteMenuDB.width = MainFrame:GetWidth()
+        RPEmoteMenuDB.height = MainFrame:GetHeight()
+    end
+end
+
+local function RestoreWindowSize()
+    MainFrame:SetSize(RPEmoteMenuDB.width, RPEmoteMenuDB.height)
+end
+
 local function ResetWindowPosition()
     RPEmoteMenuDB.point = defaults.point
     RPEmoteMenuDB.relativePoint = defaults.relativePoint
     RPEmoteMenuDB.x = defaults.x
     RPEmoteMenuDB.y = defaults.y
+    RPEmoteMenuDB.width = defaults.width
+    RPEmoteMenuDB.height = defaults.height
+
     RestoreWindowPosition()
+
+    if isWindowCollapsed then
+        MainFrame:SetSize(defaults.width, collapsedHeight)
+    else
+        RestoreWindowSize()
+    end
 end
 
 local function ApplyMovementLock()
-    MainFrame:SetMovable(not RPEmoteMenuDB.locked)
+    local unlocked = not RPEmoteMenuDB.locked
+
+    MainFrame:SetMovable(unlocked)
+    MainFrame:SetResizable(unlocked)
+
+    if ResizeGrip then
+        if unlocked and not isWindowCollapsed then
+            ResizeGrip:Show()
+        else
+            ResizeGrip:Hide()
+        end
+    end
 end
 
 -- 3. COMMAND EXECUTION
@@ -318,11 +355,13 @@ local function UpdateWindowCollapse()
         MainFrame:SetHeight(collapsedHeight)
         CollapseBtn:SetText("+")
     else
-        MainFrame:SetHeight(expandedHeight)
+        MainFrame:SetSize(RPEmoteMenuDB.width, RPEmoteMenuDB.height)
         ScrollFrame:Show()
         CollapseBtn:SetText("-")
         UpdateMenu()
     end
+
+    ApplyMovementLock()
 
     if RPEmoteMenuDB.rememberMinimized then
         RPEmoteMenuDB.minimized = isWindowCollapsed
@@ -332,7 +371,9 @@ end
 -- 6. MAIN WINDOW
 local function CreateMainWindow()
     MainFrame = CreateFrame("Frame", "RPEmoteMenu", UIParent, "BackdropTemplate")
-    MainFrame:SetSize(250, expandedHeight)
+    MainFrame:SetSize(defaults.width, defaults.height)
+    MainFrame:SetResizeBounds(minimumWidth, minimumHeight, maximumWidth, maximumHeight)
+    MainFrame:SetClampedToScreen(true)
     MainFrame:EnableMouse(true)
     MainFrame:RegisterForDrag("LeftButton")
 
@@ -345,6 +386,16 @@ local function CreateMainWindow()
     MainFrame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
         SaveWindowPosition()
+    end)
+
+    MainFrame:SetScript("OnSizeChanged", function(self, width)
+        if ScrollChild then
+            ScrollChild:SetWidth(math.max(width - 30, 1))
+        end
+
+        for _, button in ipairs(buttonsPool) do
+            button:SetWidth(math.max(width - 40, 1))
+        end
     end)
 
     MainFrame:SetBackdrop({
@@ -365,18 +416,39 @@ local function CreateMainWindow()
     ScrollFrame:SetPoint("BOTTOMRIGHT", MainFrame, "BOTTOMRIGHT", -25, 10)
 
     ScrollChild = CreateFrame("Frame", nil, ScrollFrame)
-    ScrollChild:SetSize(220, 1)
+    ScrollChild:SetSize(defaults.width - 30, 1)
     ScrollFrame:SetScrollChild(ScrollChild)
 
     CollapseBtn = CreateFrame("Button", nil, MainFrame, "UIPanelButtonTemplate")
     CollapseBtn:SetSize(22, 20)
     CollapseBtn:SetPoint("TOPRIGHT", MainFrame, "TOPRIGHT", -5, -5)
     CollapseBtn:SetScript("OnClick", function()
+        if not isWindowCollapsed then
+            SaveWindowSize()
+        end
+
         isWindowCollapsed = not isWindowCollapsed
         UpdateWindowCollapse()
     end)
 
+    ResizeGrip = CreateFrame("Button", nil, MainFrame)
+    ResizeGrip:SetSize(18, 18)
+    ResizeGrip:SetPoint("BOTTOMRIGHT", MainFrame, "BOTTOMRIGHT", -2, 2)
+    ResizeGrip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+    ResizeGrip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+    ResizeGrip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+    ResizeGrip:SetScript("OnMouseDown", function(_, button)
+        if button == "LeftButton" and not RPEmoteMenuDB.locked and not isWindowCollapsed then
+            MainFrame:StartSizing("BOTTOMRIGHT")
+        end
+    end)
+    ResizeGrip:SetScript("OnMouseUp", function()
+        MainFrame:StopMovingOrSizing()
+        SaveWindowSize()
+    end)
+
     RestoreWindowPosition()
+    RestoreWindowSize()
     ApplyMovementLock()
 
     if RPEmoteMenuDB.rememberMinimized then
@@ -426,7 +498,7 @@ local function CreateSettingsPanel()
 
     CreateCheckbox(
         panel,
-        "Lock window movement",
+        "Lock window movement and resizing",
         -70,
         function()
             return RPEmoteMenuDB.locked
@@ -468,9 +540,9 @@ local function CreateSettingsPanel()
     )
 
     local resetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    resetButton:SetSize(170, 24)
+    resetButton:SetSize(230, 24)
     resetButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -190)
-    resetButton:SetText("Reset Window Position")
+    resetButton:SetText("Reset Window Position and Size")
     resetButton:SetScript("OnClick", ResetWindowPosition)
 
     settingsCategory = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
