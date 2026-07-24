@@ -26,25 +26,25 @@ a different command when another unit is targeted.
 
   Command              Description
   -------------------- --------------------------------
-  `/emotes`            Show or hide the RP Emote Menu
-  `/emotes config`     Open the addon settings
-  `/emotes options`    Open the addon settings
-  `/emotes settings`   Open the addon settings
+  `/emotes`            Show or hide the RP Emote Menu<br>
+  `/emotes config`     Open the addon settings<br>
+  `/emotes options`    Open the addon settings<br>
+  `/emotes settings`   Open the addon settings<br>
 
 ## Target Tokens
 
   Token             Meaning
   ----------------- -------------------------------------------
-  `{target}`        Target's name without the realm
-  `{target-full}`   Target's name including the realm
-  `{player}`        Your character's name without the realm
-  `{player-full}`   Your character's name including the realm
+  `{target}`        Target's name without the realm<br>
+  `{target-full}`   Target's name including the realm<br>
+  `{player}`        Your character's name without the realm<br>
+  `{player-full}`   Your character's name including the realm<br>
 
 The **Targeted Command** is used only when another unit is targeted.
 
 ## Screenshot
 
-`<img width="292" height="385" alt="RP Emote Menu" src="https://github.com/user-attachments/assets/b811ec00-3900-443e-b9d0-c23e033b88cd" />`{=html}
+<img width="292" height="385" alt="RP Emote Menu" src="https://github.com/user-attachments/assets/b811ec00-3900-443e-b9d0-c23e033b88cd" />
 
 ------------------------------------------------------------------------
 
