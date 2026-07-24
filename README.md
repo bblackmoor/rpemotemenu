@@ -24,17 +24,21 @@ a different command when another unit is targeted.
 
 ## Slash Commands
 
-  `/emotes`            Show or hide the RP Emote Menu<br>
-  `/emotes config`     Open the addon settings<br>
-  `/emotes options`    Open the addon settings<br>
-  `/emotes settings`   Open the addon settings<br>
+| Command | Description |
+| --- | --- |
+| `/emotes` | Show or hide the RP Emote Menu |
+| `/emotes config` | Open the addon settings |
+| `/emotes options` | Open the addon settings |
+| `/emotes settings` | Open the addon settings |
 
 ## Target Tokens
 
-  `{target}`        Target's name without the realm<br>
-  `{target-full}`   Target's name including the realm<br>
-  `{player}`        Your character's name without the realm<br>
-  `{player-full}`   Your character's name including the realm<br>
+| Token | Description |
+| --- | --- |
+| `{target}` | Target's name without the realm |
+| `{target-full}` | Target's name including the realm |
+| `{player}` | Your character's name without the realm |
+| `{player-full}` | Your character's name including the realm |
 
 The **Targeted Command** is used only when another unit is targeted.
 
