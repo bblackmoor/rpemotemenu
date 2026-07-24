@@ -44,7 +44,7 @@ The **Targeted Command** is used only when another unit is targeted.
 
 ## Screenshot
 
-<img width="292" height="385" alt="RP Emote Menu" src="https://github.com/user-attachments/assets/b811ec00-3900-443e-b9d0-c23e033b88cd" />
+<img width="299" height="392" alt="image" src="https://github.com/user-attachments/assets/521b118e-d581-4186-8a34-a6b914fc86e7" />
 
 ------------------------------------------------------------------------
 
