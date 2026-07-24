@@ -1,7 +1,6 @@
 local ADDON_NAME = ...
 
 -- 1. DATA STRUCTURE
-local sectionOrder = {"THOUGHTS", "REACTIONS", "CONVERSATION", "GESTURES", "POSTURES"}
 
 -- EMOTE ENTRY FORMAT
 -- Each entry may contain:
@@ -25,7 +24,7 @@ local sectionOrder = {"THOUGHTS", "REACTIONS", "CONVERSATION", "GESTURES", "POST
 -- but the {target} tokens above are expanded by this addon before the command
 -- is sent and are therefore easier to use consistently in custom emotes.
 
-local sections = {
+local defaultSections = {
     THOUGHTS = {
         {"Blank", "/blank"},
         {"Gaze", "/gaze"},
@@ -80,12 +79,41 @@ local sections = {
 }
 
 local expandedStates = {
-    THOUGHTS = true,
-    REACTIONS = false,
-    CONVERSATION = false,
-    GESTURES = false,
-    POSTURES = false
+    [1] = true,
+    [2] = false,
+    [3] = false,
+    [4] = false,
+    [5] = false
 }
+
+local function Trim(value)
+    return strtrim(value or "")
+end
+
+local function CopyDefaultCategories()
+    local categories = {}
+    local order = {"THOUGHTS", "REACTIONS", "CONVERSATION", "GESTURES", "POSTURES"}
+
+    for categoryIndex, categoryKey in ipairs(order) do
+        local category = {
+            name = categoryKey,
+            emotes = {}
+        }
+
+        for emoteIndex = 1, 10 do
+            local source = defaultSections[categoryKey][emoteIndex]
+            category.emotes[emoteIndex] = {
+                label = source and source[1] or "",
+                defaultCommand = source and source[2] or "",
+                targetedCommand = source and source[3] or ""
+            }
+        end
+
+        categories[categoryIndex] = category
+    end
+
+    return categories
+end
 
 local defaults = {
     locked = false,
@@ -97,7 +125,8 @@ local defaults = {
     x = 0,
     y = 100,
     width = 250,
-    height = 350
+    height = 350,
+    emoteDataVersion = 4
 }
 
 local emoteAliases = {
@@ -117,18 +146,141 @@ local ScrollChild
 local CollapseBtn
 local ResizeGrip
 local settingsCategory
+local generalSettingsCategory
+local categorySettingsCategories = {}
+local emoteEditorRefresh
 local buttonsPool = {}
 local isWindowCollapsed = false
 
 -- 2. SAVED SETTINGS
+local function NormalizeCategories(categories)
+    categories = type(categories) == "table" and categories or {}
+
+    for categoryIndex = 1, 5 do
+        local category = categories[categoryIndex]
+
+        if type(category) ~= "table" then
+            category = {name = "", emotes = {}}
+            categories[categoryIndex] = category
+        end
+
+        category.name = category.name or ""
+        category.emotes = type(category.emotes) == "table" and category.emotes or {}
+
+        for emoteIndex = 1, 10 do
+            local emote = category.emotes[emoteIndex]
+
+            if type(emote) ~= "table" then
+                emote = {}
+                category.emotes[emoteIndex] = emote
+            end
+
+            emote.label = emote.label or ""
+            emote.defaultCommand = emote.defaultCommand or ""
+            emote.targetedCommand = emote.targetedCommand or ""
+        end
+    end
+
+    return categories
+end
+
+local function CopyCategories(sourceCategories)
+    local copy = {}
+
+    for categoryIndex = 1, 5 do
+        local sourceCategory = sourceCategories[categoryIndex] or {}
+        local category = {
+            name = sourceCategory.name or "",
+            emotes = {}
+        }
+
+        for emoteIndex = 1, 10 do
+            local sourceEmote =
+                sourceCategory.emotes and sourceCategory.emotes[emoteIndex] or {}
+
+            category.emotes[emoteIndex] = {
+                label = sourceEmote.label or "",
+                defaultCommand = sourceEmote.defaultCommand or "",
+                targetedCommand = sourceEmote.targetedCommand or ""
+            }
+        end
+
+        copy[categoryIndex] = category
+    end
+
+    return copy
+end
+
 local function InitializeDatabase()
     RPEmoteMenuDB = RPEmoteMenuDB or {}
 
     for key, value in pairs(defaults) do
-        if RPEmoteMenuDB[key] == nil then
+        if key ~= "emoteDataVersion" and RPEmoteMenuDB[key] == nil then
             RPEmoteMenuDB[key] = value
         end
     end
+
+    -- The database has two separate emote tables:
+    --
+    -- defaultCategories:
+    --     A stored copy of the values supplied with this addon version.
+    --
+    -- categories:
+    --     The editable current values. Both the options fields and the main
+    --     addon window read from this table.
+    --
+    -- This migration fills BOTH tables with the current supplied values once.
+    -- Later user changes affect only categories and are preserved, including
+    -- deliberately blank fields.
+    if RPEmoteMenuDB.emoteDataVersion ~= defaults.emoteDataVersion then
+        local suppliedValues = CopyDefaultCategories()
+
+        -- Store the supplied values twice:
+        -- defaultCategories is the reset source.
+        -- categories is the editable current data used everywhere in the addon.
+        RPEmoteMenuDB.defaultCategories = CopyCategories(suppliedValues)
+        RPEmoteMenuDB.categories = CopyCategories(suppliedValues)
+        RPEmoteMenuDB.emoteDataVersion = defaults.emoteDataVersion
+    else
+        RPEmoteMenuDB.defaultCategories = NormalizeCategories(
+            RPEmoteMenuDB.defaultCategories or CopyDefaultCategories()
+        )
+
+        RPEmoteMenuDB.categories = NormalizeCategories(
+            RPEmoteMenuDB.categories
+                or CopyCategories(RPEmoteMenuDB.defaultCategories)
+        )
+    end
+end
+
+local function ResetCategoryToDefaults(categoryIndex)
+    -- Rebuild only this category from the defaults supplied in this Lua file.
+    local suppliedDefaults = CopyDefaultCategories()
+    RPEmoteMenuDB.defaultCategories[categoryIndex] =
+        CopyCategories(suppliedDefaults)[categoryIndex]
+    RPEmoteMenuDB.categories[categoryIndex] =
+        CopyCategories(suppliedDefaults)[categoryIndex]
+
+    if emoteEditorRefresh then
+        emoteEditorRefresh(categoryIndex)
+    end
+
+    UpdateMenu()
+end
+
+local function SaveWindowPosition()
+    local left = MainFrame:GetLeft()
+    local top = MainFrame:GetTop()
+
+    if not left or not top then
+        return
+    end
+
+    -- Always save the window relative to its upper-left corner.
+    RPEmoteMenuDB.point = "TOPLEFT"
+    RPEmoteMenuDB.relativePoint = "BOTTOMLEFT"
+    RPEmoteMenuDB.x = left
+    RPEmoteMenuDB.y = top
 end
 
 local function RestoreWindowPosition()
@@ -140,15 +292,17 @@ local function RestoreWindowPosition()
         RPEmoteMenuDB.x,
         RPEmoteMenuDB.y
     )
-end
 
-local function SaveWindowPosition()
-    local point, _, relativePoint, x, y = MainFrame:GetPoint(1)
-
-    RPEmoteMenuDB.point = point
-    RPEmoteMenuDB.relativePoint = relativePoint
-    RPEmoteMenuDB.x = x
-    RPEmoteMenuDB.y = y
+    -- Convert older saved CENTER or other anchors to the stable TOPLEFT anchor.
+    SaveWindowPosition()
+    MainFrame:ClearAllPoints()
+    MainFrame:SetPoint(
+        RPEmoteMenuDB.point,
+        UIParent,
+        RPEmoteMenuDB.relativePoint,
+        RPEmoteMenuDB.x,
+        RPEmoteMenuDB.y
+    )
 end
 
 local function SaveWindowSize()
@@ -279,7 +433,36 @@ local function GetContainerButton()
     return button
 end
 
-local function UpdateMenu()
+local function GetCurrentCategory(categoryIndex)
+    local categories = RPEmoteMenuDB and RPEmoteMenuDB.categories
+    return categories and categories[categoryIndex] or nil
+end
+
+local function IsEmoteVisible(emote)
+    return emote
+        and Trim(emote.label) ~= ""
+        and Trim(emote.defaultCommand) ~= ""
+end
+
+local function GetVisibleEmotes(category)
+    local visibleEmotes = {}
+
+    if not category or Trim(category.name) == "" then
+        return visibleEmotes
+    end
+
+    for emoteIndex = 1, 10 do
+        local emote = category.emotes and category.emotes[emoteIndex]
+
+        if IsEmoteVisible(emote) then
+            table.insert(visibleEmotes, emote)
+        end
+    end
+
+    return visibleEmotes
+end
+
+function UpdateMenu()
     for _, button in ipairs(buttonsPool) do
         button:Hide()
         button:ClearAllPoints()
@@ -288,48 +471,57 @@ local function UpdateMenu()
 
     local dynamicY = 0
 
-    for _, sectionName in ipairs(sectionOrder) do
-        local isExpanded = expandedStates[sectionName]
-        local marker
+    for categoryIndex = 1, 5 do
+        local savedCategoryIndex = categoryIndex
+        local category = GetCurrentCategory(savedCategoryIndex)
+        local categoryName = Trim(category and category.name)
+        local visibleEmotes = GetVisibleEmotes(category)
 
-        if isExpanded then
-            marker = "|TInterface\\Buttons\\UI-MinusButton-Up:16:16:0:0|t "
-        else
-            marker = "|TInterface\\Buttons\\UI-PlusButton-Up:16:16:0:0|t "
-        end
+        -- A category is shown only when it has a nonblank name and at least
+        -- one emote with both a nonblank label and default command.
+        if categoryName ~= "" and #visibleEmotes > 0 then
+            local isExpanded = expandedStates[savedCategoryIndex]
+            local marker
 
-        local header = GetContainerButton()
-        header:SetPoint("TOPLEFT", ScrollChild, "TOPLEFT", 0, -dynamicY)
-        header.Text:SetText(marker .. sectionName)
-        header.Text:SetTextColor(1.0, 0.82, 0.0)
-        header:SetScript("OnClick", function()
-            expandedStates[sectionName] = not expandedStates[sectionName]
-            UpdateMenu()
-        end)
-        header:Show()
-
-        dynamicY = dynamicY + 22
-
-        if isExpanded then
-            for _, item in ipairs(sections[sectionName]) do
-                local label = item[1]
-                local defaultCommand = item[2]
-                local targetedCommand = item[3]
-                local emoteButton = GetContainerButton()
-
-                emoteButton:SetPoint("TOPLEFT", ScrollChild, "TOPLEFT", 20, -dynamicY)
-                emoteButton.Text:SetText(label)
-                emoteButton.Text:SetTextColor(1, 1, 1)
-                emoteButton:SetScript("OnClick", function()
-                    ExecuteEmoteCommand(defaultCommand, targetedCommand)
-                end)
-                emoteButton:Show()
-
-                dynamicY = dynamicY + 18
+            if isExpanded then
+                marker = "|TInterface\\Buttons\\UI-MinusButton-Up:16:16:0:0|t "
+            else
+                marker = "|TInterface\\Buttons\\UI-PlusButton-Up:16:16:0:0|t "
             end
-        end
 
-        dynamicY = dynamicY + 2
+            local header = GetContainerButton()
+            header:SetPoint("TOPLEFT", ScrollChild, "TOPLEFT", 0, -dynamicY)
+            header.Text:SetText(marker .. categoryName)
+            header.Text:SetTextColor(1.0, 0.82, 0.0)
+            header:SetScript("OnClick", function()
+                expandedStates[savedCategoryIndex] = not expandedStates[savedCategoryIndex]
+                UpdateMenu()
+            end)
+            header:Show()
+
+            dynamicY = dynamicY + 22
+
+            if isExpanded then
+                for _, emote in ipairs(visibleEmotes) do
+                    local label = emote.label
+                    local defaultCommand = emote.defaultCommand
+                    local targetedCommand = emote.targetedCommand
+                    local emoteButton = GetContainerButton()
+
+                    emoteButton:SetPoint("TOPLEFT", ScrollChild, "TOPLEFT", 20, -dynamicY)
+                    emoteButton.Text:SetText(label)
+                    emoteButton.Text:SetTextColor(1, 1, 1)
+                    emoteButton:SetScript("OnClick", function()
+                        ExecuteEmoteCommand(defaultCommand, targetedCommand)
+                    end)
+                    emoteButton:Show()
+
+                    dynamicY = dynamicY + 18
+                end
+            end
+
+            dynamicY = dynamicY + 2
+        end
     end
 
     ScrollChild:SetHeight(math.max(dynamicY, 1))
@@ -408,7 +600,7 @@ local function CreateMainWindow()
 
     local title = MainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 10, -10)
-    title:SetText("RP Emote Menu")
+    title:SetText("RP Emote Menu 1.3")
     title:SetTextColor(1, 1, 1, 1)
 
     ScrollFrame = CreateFrame("ScrollFrame", nil, MainFrame, "UIPanelScrollFrameTemplate")
@@ -447,8 +639,9 @@ local function CreateMainWindow()
         SaveWindowSize()
     end)
 
-    RestoreWindowPosition()
+    -- Restore size first so legacy non-TOPLEFT anchors can be converted accurately.
     RestoreWindowSize()
+    RestoreWindowPosition()
     ApplyMovementLock()
 
     if RPEmoteMenuDB.rememberMinimized then
@@ -483,61 +676,161 @@ local function CreateCheckbox(parent, label, y, getValue, setValue)
     return checkbox
 end
 
-local function CreateSettingsPanel()
+local function CreateLabeledEditBox(
+    parent,
+    labelText,
+    x,
+    y,
+    width,
+    categoryIndex,
+    emoteIndex,
+    fieldName
+)
+    local label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    label:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    label:SetText(labelText)
+
+    local editBox = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+    editBox:SetSize(width, 24)
+    editBox:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 4, -3)
+    editBox:SetAutoFocus(false)
+    editBox:SetFont(STANDARD_TEXT_FONT, 12, "")
+    editBox:SetTextColor(1, 1, 1, 1)
+
+    editBox.categoryIndex = categoryIndex
+    editBox.emoteIndex = emoteIndex
+    editBox.fieldName = fieldName
+
+    local function GetCurrentValue(self)
+        local category = RPEmoteMenuDB.categories[self.categoryIndex]
+
+        if self.emoteIndex then
+            return category.emotes[self.emoteIndex][self.fieldName] or ""
+        end
+
+        return category[self.fieldName] or ""
+    end
+
+    local function SetCurrentValue(self, value)
+        local category = RPEmoteMenuDB.categories[self.categoryIndex]
+
+        if self.emoteIndex then
+            category.emotes[self.emoteIndex][self.fieldName] = value
+        else
+            category[self.fieldName] = value
+        end
+    end
+
+    local function DisplayCurrentValue(self)
+        local value = GetCurrentValue(self)
+        if self:GetText() ~= value then
+            self:SetText(value)
+        end
+    end
+
+    editBox.RefreshFromDatabase = function(self)
+        DisplayCurrentValue(self)
+        self:SetCursorPosition(0)
+        self:HighlightText(0, 0)
+    end
+
+    -- Blizzard's Settings panel can clear edit-box text during layout.
+    -- Reapply the saved value after the box is shown, and keep it synchronized
+    -- while it is not being actively edited.
+    editBox:SetScript("OnShow", function(self)
+        DisplayCurrentValue(self)
+        self:SetCursorPosition(0)
+
+        C_Timer.After(0, function()
+            if self and self:IsShown() then
+                DisplayCurrentValue(self)
+                self:SetCursorPosition(0)
+            end
+        end)
+    end)
+
+    editBox:SetScript("OnUpdate", function(self)
+        if not self:HasFocus() then
+            DisplayCurrentValue(self)
+        end
+    end)
+
+    local function Commit(self)
+        SetCurrentValue(self, self:GetText() or "")
+        UpdateMenu()
+    end
+
+    editBox:SetScript("OnTextChanged", function(self, userInput)
+        if userInput then
+            Commit(self)
+        end
+    end)
+
+    editBox:SetScript("OnEnterPressed", function(self)
+        Commit(self)
+        self:ClearFocus()
+    end)
+
+    editBox:SetScript("OnEditFocusLost", function(self)
+        Commit(self)
+        DisplayCurrentValue(self)
+    end)
+
+    editBox:RefreshFromDatabase()
+    return editBox
+end
+
+
+local function CreateAboutPanel()
     local panel = CreateFrame("Frame")
-    panel.name = "RP Emote Menu"
 
     local heading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     heading:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -16)
-    heading:SetText("RP Emote Menu")
+    heading:SetText("RP Emote Menu — About")
+
+    local description = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    description:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -12)
+    description:SetWidth(620)
+    description:SetJustifyH("LEFT")
+    description:SetText("A configurable, collapsible quick-emote menu for roleplaying. Create up to five categories with ten emotes in each category, including optional target-specific commands.")
+
+    local details = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    details:SetPoint("TOPLEFT", description, "BOTTOMLEFT", 0, -24)
+    details:SetJustifyH("LEFT")
+    details:SetText("Version 1.3\nAuthor  Brandon Blackmoor\nCategory  Roleplay\nLicense  GPL-3.0")
+
+    return panel
+end
+
+local function CreateGeneralSettingsPanel()
+    local panel = CreateFrame("Frame")
+
+    local heading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    heading:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -16)
+    heading:SetText("General")
 
     local description = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     description:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -8)
     description:SetText("Configure the RP Emote Menu window.")
     description:SetTextColor(0.8, 0.8, 0.8)
 
-    CreateCheckbox(
-        panel,
-        "Lock window movement and resizing",
-        -70,
-        function()
-            return RPEmoteMenuDB.locked
-        end,
+    CreateCheckbox(panel, "Lock window movement and resizing", -70,
+        function() return RPEmoteMenuDB.locked end,
         function(value)
             RPEmoteMenuDB.locked = value
             ApplyMovementLock()
-        end
-    )
+        end)
 
-    CreateCheckbox(
-        panel,
-        "Show the addon at login",
-        -105,
-        function()
-            return RPEmoteMenuDB.showAtLogin
-        end,
-        function(value)
-            RPEmoteMenuDB.showAtLogin = value
-        end
-    )
+    CreateCheckbox(panel, "Show the addon at login", -105,
+        function() return RPEmoteMenuDB.showAtLogin end,
+        function(value) RPEmoteMenuDB.showAtLogin = value end)
 
-    CreateCheckbox(
-        panel,
-        "Remember whether the main window was minimized",
-        -140,
-        function()
-            return RPEmoteMenuDB.rememberMinimized
-        end,
+    CreateCheckbox(panel, "Remember whether the main window was minimized", -140,
+        function() return RPEmoteMenuDB.rememberMinimized end,
         function(value)
             RPEmoteMenuDB.rememberMinimized = value
-
-            if value then
-                RPEmoteMenuDB.minimized = isWindowCollapsed
-            else
-                RPEmoteMenuDB.minimized = false
-            end
-        end
-    )
+            RPEmoteMenuDB.minimized = value and isWindowCollapsed or false
+        end)
 
     local resetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     resetButton:SetSize(230, 24)
@@ -545,12 +838,165 @@ local function CreateSettingsPanel()
     resetButton:SetText("Reset Window Position and Size")
     resetButton:SetScript("OnClick", ResetWindowPosition)
 
-    settingsCategory = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
+    return panel
+end
+
+local function CreateCategorySettingsPanel(categoryIndex)
+    local panel = CreateFrame("Frame")
+
+    local scrollFrame = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, -4)
+    scrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -28, 4)
+
+    local content = CreateFrame("Frame", nil, scrollFrame)
+    content:SetSize(700, 2300)
+    scrollFrame:SetScrollChild(content)
+
+    local heading = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    heading:SetPoint("TOPLEFT", content, "TOPLEFT", 16, -16)
+    heading:SetText("Category " .. categoryIndex)
+
+    local resetButton = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+    resetButton:SetSize(190, 24)
+    resetButton:SetPoint("TOPLEFT", content, "TOPLEFT", 16, -48)
+    resetButton:SetText("Reset Category to Defaults")
+    resetButton:SetScript("OnClick", function()
+        ResetCategoryToDefaults(categoryIndex)
+    end)
+
+    local placeholderText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    placeholderText:SetPoint("TOPLEFT", resetButton, "BOTTOMLEFT", 0, -12)
+    placeholderText:SetWidth(630)
+    placeholderText:SetJustifyH("LEFT")
+    placeholderText:SetText(
+        "Placeholders:  {target} target name;  {target-full} target and realm;  " ..
+        "{player} your name;  {player-full} your name and realm.  " ..
+        "Targeted Command is used only when another unit is targeted."
+    )
+    placeholderText:SetTextColor(0.8, 0.8, 0.8)
+
+    local editors = {}
+    local y = -126
+
+    local nameBox = CreateLabeledEditBox(
+        content,
+        "Category Name",
+        16,
+        y,
+        300,
+        categoryIndex,
+        nil,
+        "name"
+    )
+    table.insert(editors, nameBox)
+
+    y = y - 82
+
+    for emoteIndex = 1, 10 do
+        local emoteNumber = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        emoteNumber:SetPoint("TOPLEFT", content, "TOPLEFT", 28, y)
+        emoteNumber:SetText("Emote " .. emoteIndex)
+
+        local labelBox = CreateLabeledEditBox(
+            content,
+            "Emote Label",
+            48,
+            y - 22,
+            270,
+            categoryIndex,
+            emoteIndex,
+            "label"
+        )
+
+        local defaultBox = CreateLabeledEditBox(
+            content,
+            "Default Command",
+            48,
+            y - 74,
+            570,
+            categoryIndex,
+            emoteIndex,
+            "defaultCommand"
+        )
+
+        local targetedBox = CreateLabeledEditBox(
+            content,
+            "Targeted Command (optional)",
+            48,
+            y - 126,
+            570,
+            categoryIndex,
+            emoteIndex,
+            "targetedCommand"
+        )
+
+        table.insert(editors, labelBox)
+        table.insert(editors, defaultBox)
+        table.insert(editors, targetedBox)
+
+        y = y - 188
+    end
+
+    content:SetHeight(-y + 30)
+
+    panel.RefreshEditors = function()
+        for _, editBox in ipairs(editors) do
+            editBox:RefreshFromDatabase()
+        end
+    end
+
+    panel:SetScript("OnShow", function(self)
+        self.RefreshEditors()
+    end)
+
+    return panel
+end
+
+local function CreateSettingsPanel()
+    local aboutPanel = CreateAboutPanel()
+    local generalPanel = CreateGeneralSettingsPanel()
+    local categoryPanels = {}
+
+    settingsCategory = Settings.RegisterCanvasLayoutCategory(aboutPanel, "RP Emote Menu")
     Settings.RegisterAddOnCategory(settingsCategory)
+
+    generalSettingsCategory = Settings.RegisterCanvasLayoutSubcategory(
+        settingsCategory,
+        generalPanel,
+        "General"
+    )
+
+    for categoryIndex = 1, 5 do
+        local panel = CreateCategorySettingsPanel(categoryIndex)
+        categoryPanels[categoryIndex] = panel
+        categorySettingsCategories[categoryIndex] = Settings.RegisterCanvasLayoutSubcategory(
+            settingsCategory,
+            panel,
+            "Category " .. categoryIndex
+        )
+    end
+
+    emoteEditorRefresh = function(categoryIndex)
+        if categoryIndex then
+            local panel = categoryPanels[categoryIndex]
+            if panel and panel.RefreshEditors then
+                panel.RefreshEditors()
+            end
+            return
+        end
+
+        for _, panel in ipairs(categoryPanels) do
+            if panel.RefreshEditors then
+                panel.RefreshEditors()
+            end
+        end
+    end
 end
 
 local function OpenSettings()
-    if settingsCategory then
+    if generalSettingsCategory then
+        Settings.OpenToCategory(generalSettingsCategory:GetID())
+    elseif settingsCategory then
         Settings.OpenToCategory(settingsCategory:GetID())
     end
 end
