@@ -3,6 +3,7 @@
 ## Notes: Collapsible, scrollable RP quick emote menu.
 ## Author: Brandon Blackmoor <bblackmoor@blackgate.net>
 ## Version: 1.1
+## IconTexture: Interface\AddOns\RPEmoteMenu\Media\icon
 ## SavedVariables: RPEmoteMenuDB
 
 ## Category-enUS: Roleplay
