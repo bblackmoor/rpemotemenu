@@ -19,4 +19,4 @@
 ## X-License: GPL-3.0
 ## X-Website: https://github.com/bblackmoor/rpemotemenu/
 
-RP_Emote_Menu.lua
+RPEmoteMenu.lua
