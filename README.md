@@ -25,7 +25,7 @@ a different command when another unit is targeted.
 ## Slash Commands
 
 | Command            | Description                    |
-| ------------------ | ------------------------------ |
+| :----------------- | :----------------------------- |
 | `/emotes`          | Show or hide the RP Emote Menu |
 | `/emotes config`   | Open the addon settings        |
 | `/emotes options`  | Open the addon settings        |
@@ -34,7 +34,7 @@ a different command when another unit is targeted.
 ## Target Tokens
 
 | Token           | Description                               |
-| --------------- | ----------------------------------------- |
+| :-------------- | :---------------------------------------- |
 | `{target}`      | Target's name without the realm           |
 | `{target-full}` | Target's name including the realm         |
 | `{player}`      | Your character's name without the realm   |
