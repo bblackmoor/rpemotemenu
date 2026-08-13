@@ -1,4 +1,4 @@
-## Interface: 120007
+## Interface: 120100
 ## Title: RP Emote Menu
 ## Notes: Collapsible, scrollable RP quick emote menu.
 ## Author: Brandon Blackmoor <bblackmoor@blackgate.net>
