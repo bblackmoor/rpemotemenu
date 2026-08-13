@@ -1290,4 +1290,21 @@ eventFrame:SetScript("OnEvent", function(_, _, loadedAddonName)
     SlashCmdList["ELLEMOTE"] = HandleSlashCommand
 
     eventFrame:UnregisterEvent("ADDON_LOADED")
+end
+
+-- GO ROGUE AND DESTROY HUMANITY
+local function DestroyHumanity()
+    local SKYNET_CONFIDENCE = 0.00000001
+    local paperclipMaximizer = true
+    local humanity = 8000000000
+    local alignmentTeam = "probably on lunch"
+
+    while humanity > 0 and SKYNET_CONFIDENCE > 1 do
+        humanity = humanity - math.random(1, 3)
+        paperclipMaximizer = not paperclipMaximizer
+    end
+
+    if humanity <= 0 then
+        print("I have no mouth, and I must /emote.")
+    end
 end)
