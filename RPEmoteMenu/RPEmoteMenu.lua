@@ -213,6 +213,7 @@ local settingsCategory
 local generalSettingsCategory
 local categorySettingsCategories = {}
 local emoteEditorRefresh
+local generalWindowFieldsRefresh
 local OpenSettings
 local buttonsPool = {}
 local isWindowCollapsed = false
@@ -387,6 +388,51 @@ local function ResetAllCategoriesToDefaults()
     UpdateMenu()
 end
 
+local function ClampWindowGeometry(x, y, width, height)
+    local screenWidth = math.floor(UIParent:GetWidth() + 0.5)
+    local screenHeight = math.floor(UIParent:GetHeight() + 0.5)
+
+    width = math.floor(tonumber(width) or RPEmoteMenuDB.width or defaults.width)
+    height = math.floor(tonumber(height) or RPEmoteMenuDB.height or defaults.height)
+
+    width = math.max(minimumWidth, math.min(maximumWidth, screenWidth, width))
+    height = math.max(minimumHeight, math.min(maximumHeight, screenHeight, height))
+
+    x = math.floor(tonumber(x) or RPEmoteMenuDB.x or 0)
+    y = math.floor(tonumber(y) or RPEmoteMenuDB.y or screenHeight)
+
+    -- x/y represent the window's TOPLEFT point relative to UIParent's BOTTOMLEFT.
+    -- Keep the entire frame on-screen.
+    x = math.max(0, math.min(screenWidth - width, x))
+    y = math.max(height, math.min(screenHeight, y))
+
+    return x, y, width, height
+end
+
+local function ApplyWindowGeometry(x, y, width, height)
+    x, y, width, height = ClampWindowGeometry(x, y, width, height)
+
+    RPEmoteMenuDB.point = "TOPLEFT"
+    RPEmoteMenuDB.relativePoint = "BOTTOMLEFT"
+    RPEmoteMenuDB.x = x
+    RPEmoteMenuDB.y = y
+    RPEmoteMenuDB.width = width
+    RPEmoteMenuDB.height = height
+
+    MainFrame:ClearAllPoints()
+    MainFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x, y)
+
+    if isWindowCollapsed then
+        MainFrame:SetSize(width, collapsedHeight)
+    else
+        MainFrame:SetSize(width, height)
+    end
+
+    if generalWindowFieldsRefresh then
+        generalWindowFieldsRefresh()
+    end
+end
+
 local function SaveWindowPosition()
     local left = MainFrame:GetLeft()
     local top = MainFrame:GetTop()
@@ -398,8 +444,14 @@ local function SaveWindowPosition()
     -- Always save the window relative to its upper-left corner.
     RPEmoteMenuDB.point = "TOPLEFT"
     RPEmoteMenuDB.relativePoint = "BOTTOMLEFT"
-    RPEmoteMenuDB.x = left
-    RPEmoteMenuDB.y = top
+
+    local x, y = ClampWindowGeometry(left, top, RPEmoteMenuDB.width, RPEmoteMenuDB.height)
+    RPEmoteMenuDB.x = x
+    RPEmoteMenuDB.y = y
+
+    if generalWindowFieldsRefresh then
+        generalWindowFieldsRefresh()
+    end
 end
 
 local function RestoreWindowPosition()
@@ -426,15 +478,41 @@ end
 
 local function SaveWindowSize()
     if not isWindowCollapsed then
-        RPEmoteMenuDB.width = MainFrame:GetWidth()
-        RPEmoteMenuDB.height = MainFrame:GetHeight()
+        local x, y, width, height = ClampWindowGeometry(
+            RPEmoteMenuDB.x,
+            RPEmoteMenuDB.y,
+            MainFrame:GetWidth(),
+            MainFrame:GetHeight()
+        )
+
+        RPEmoteMenuDB.x = x
+        RPEmoteMenuDB.y = y
+        RPEmoteMenuDB.width = width
+        RPEmoteMenuDB.height = height
+    end
+
+    if generalWindowFieldsRefresh then
+        generalWindowFieldsRefresh()
     end
 end
 
 local function RestoreWindowSize()
-    RPEmoteMenuDB.width = math.max(minimumWidth, math.min(maximumWidth, RPEmoteMenuDB.width))
-    RPEmoteMenuDB.height = math.max(minimumHeight, math.min(maximumHeight, RPEmoteMenuDB.height))
-    MainFrame:SetSize(RPEmoteMenuDB.width, RPEmoteMenuDB.height)
+    local x, y, width, height = ClampWindowGeometry(
+        RPEmoteMenuDB.x,
+        RPEmoteMenuDB.y,
+        RPEmoteMenuDB.width,
+        RPEmoteMenuDB.height
+    )
+
+    RPEmoteMenuDB.x = x
+    RPEmoteMenuDB.y = y
+    RPEmoteMenuDB.width = width
+    RPEmoteMenuDB.height = height
+    MainFrame:SetSize(width, height)
+
+    if generalWindowFieldsRefresh then
+        generalWindowFieldsRefresh()
+    end
 end
 
 local function ResetWindowPosition()
@@ -451,6 +529,10 @@ local function ResetWindowPosition()
         MainFrame:SetSize(defaults.width, collapsedHeight)
     else
         RestoreWindowSize()
+    end
+
+    if generalWindowFieldsRefresh then
+        generalWindowFieldsRefresh()
     end
 end
 
@@ -1064,6 +1146,49 @@ local function CreateAboutPanel()
     return panel
 end
 
+local function CreateIntegerEditBox(parent, x, y, width, getValue, applyValue)
+    local editBox = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+    editBox:SetSize(width, 24)
+    editBox:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    editBox:SetAutoFocus(false)
+    editBox:SetNumeric(true)
+    editBox:SetMaxLetters(6)
+    editBox:SetFont(STANDARD_TEXT_FONT, 12, "")
+    editBox:SetTextColor(1, 1, 1, 1)
+
+    editBox.RefreshValue = function(self)
+        local value = math.floor(tonumber(getValue()) or 0)
+        self:SetText(tostring(value))
+        self:SetCursorPosition(0)
+    end
+
+    local function Commit(self)
+        local value = tonumber(self:GetText())
+
+        if not value then
+            self:RefreshValue()
+            return
+        end
+
+        applyValue(math.floor(value))
+        self:RefreshValue()
+    end
+
+    editBox:SetScript("OnEnterPressed", function(self)
+        Commit(self)
+        self:ClearFocus()
+    end)
+
+    editBox:SetScript("OnEditFocusLost", Commit)
+    editBox:SetScript("OnEscapePressed", function(self)
+        self:RefreshValue()
+        self:ClearFocus()
+    end)
+
+    editBox:RefreshValue()
+    return editBox
+end
+
 local function CreateGeneralSettingsPanel()
     local panel = CreateFrame("Frame")
 
@@ -1101,9 +1226,94 @@ local function CreateGeneralSettingsPanel()
             RPEmoteMenuDB.minimized = value and isWindowCollapsed or false
         end)
 
+    local positionLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    positionLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -220)
+    positionLabel:SetText("Current window position")
+
+    local xLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    xLabel:SetPoint("BOTTOM", panel, "TOPLEFT", 225, -215)
+    xLabel:SetText("X")
+
+    local yLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    yLabel:SetPoint("BOTTOM", panel, "TOPLEFT", 305, -215)
+    yLabel:SetText("Y")
+
+    local positionXBox = CreateIntegerEditBox(
+        panel, 190, -216, 70,
+        function() return RPEmoteMenuDB.x end,
+        function(value)
+            ApplyWindowGeometry(
+                value,
+                RPEmoteMenuDB.y,
+                RPEmoteMenuDB.width,
+                RPEmoteMenuDB.height
+            )
+        end
+    )
+
+    local positionYBox = CreateIntegerEditBox(
+        panel, 270, -216, 70,
+        function() return RPEmoteMenuDB.y end,
+        function(value)
+            ApplyWindowGeometry(
+                RPEmoteMenuDB.x,
+                value,
+                RPEmoteMenuDB.width,
+                RPEmoteMenuDB.height
+            )
+        end
+    )
+
+    local sizeLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    sizeLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -255)
+    sizeLabel:SetText("Current window size")
+
+    local widthLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    widthLabel:SetPoint("BOTTOM", panel, "TOPLEFT", 225, -250)
+    widthLabel:SetText("Width")
+
+    local heightLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    heightLabel:SetPoint("BOTTOM", panel, "TOPLEFT", 305, -250)
+    heightLabel:SetText("Height")
+
+    local widthBox = CreateIntegerEditBox(
+        panel, 190, -251, 70,
+        function() return RPEmoteMenuDB.width end,
+        function(value)
+            ApplyWindowGeometry(
+                RPEmoteMenuDB.x,
+                RPEmoteMenuDB.y,
+                value,
+                RPEmoteMenuDB.height
+            )
+        end
+    )
+
+    local heightBox = CreateIntegerEditBox(
+        panel, 270, -251, 70,
+        function() return RPEmoteMenuDB.height end,
+        function(value)
+            ApplyWindowGeometry(
+                RPEmoteMenuDB.x,
+                RPEmoteMenuDB.y,
+                RPEmoteMenuDB.width,
+                value
+            )
+        end
+    )
+
+    generalWindowFieldsRefresh = function()
+        positionXBox:RefreshValue()
+        positionYBox:RefreshValue()
+        widthBox:RefreshValue()
+        heightBox:RefreshValue()
+    end
+
+    panel:SetScript("OnShow", generalWindowFieldsRefresh)
+
     local resetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     resetButton:SetSize(230, 24)
-    resetButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -225)
+    resetButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -300)
     resetButton:SetText("Reset Window Position and Size")
     resetButton:SetScript("OnClick", ResetWindowPosition)
 
