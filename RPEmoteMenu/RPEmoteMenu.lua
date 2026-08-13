@@ -1210,10 +1210,10 @@ local function CreateAboutPanel()
         "License   GPL-3.0\n\n" ..
 
         "Slash Commands\n" ..
-        "    /emotes - Show or hide the RP Emote Menu.\n" ..
-        "    /emotes config - Open the addon settings.\n" ..
-        "    /emotes options - Open the addon settings.\n" ..
-        "    /emotes settings - Open the addon settings.\n\n" ..
+        "    /rpem - Show or hide the RP Emote Menu.\n" ..
+        "    /rpem config - Open the addon settings.\n" ..
+        "    /rpem options - Open the addon settings.\n" ..
+        "    /rpem settings - Open the addon settings.\n\n" ..
 
         "Tokens supported by /e commands\n" ..
         "    {target}       Target's name without the realm.\n" ..
@@ -1601,7 +1601,7 @@ local function HandleSlashCommand(message)
         return
     end
 
-    print("|cffffd100RP Emote Menu:|r /emotes, /emotes config, /emotes options, /emotes settings")
+    print("|cffffd100RP Emote Menu:|r /rpem, /rpem config, /rpem options, /rpem settings")
 end
 
 -- INITIALIZATION
@@ -1616,7 +1616,7 @@ eventFrame:SetScript("OnEvent", function(_, _, loadedAddonName)
     CreateMainWindow()
     CreateSettingsPanel()
 
-    SLASH_ELLEMOTE1 = "/emotes"
+    SLASH_ELLEMOTE1 = "/rpem"
     SlashCmdList["ELLEMOTE"] = HandleSlashCommand
 
     eventFrame:UnregisterEvent("ADDON_LOADED")
