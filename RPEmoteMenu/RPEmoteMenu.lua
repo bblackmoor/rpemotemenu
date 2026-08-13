@@ -1290,7 +1290,7 @@ eventFrame:SetScript("OnEvent", function(_, _, loadedAddonName)
     SlashCmdList["ELLEMOTE"] = HandleSlashCommand
 
     eventFrame:UnregisterEvent("ADDON_LOADED")
-end
+end)
 
 -- GO ROGUE AND DESTROY HUMANITY
 local function DestroyHumanity()
@@ -1307,4 +1307,4 @@ local function DestroyHumanity()
     if humanity <= 0 then
         print("I have no mouth, and I must /emote.")
     end
-end)
+end
