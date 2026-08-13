@@ -29,14 +29,14 @@ local defaultSections = {
     {
         name = "Favorites",
         emotes = {
-            {"Wave", "/wave"}
-            {"Cheer", "/cheer"}
-            {"Clap", "/clap"}
-            {"Cackle", "/cackle"}
-            {"Lean", "/lean"}
-            {"Look", "/look"}
-            {"Pat", "/pat"}
-            {"Point", "/point"}
+            {"Wave", "/wave"},
+            {"Cheer", "/cheer"},
+            {"Clap", "/clap"},
+            {"Cackle", "/cackle"},
+            {"Lean", "/lean"},
+            {"Look", "/look"},
+            {"Pat", "/pat"},
+            {"Point", "/point"},
             {"Salute", "/salute"}
         }
     },
