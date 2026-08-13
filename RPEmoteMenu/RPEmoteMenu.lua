@@ -49,7 +49,7 @@ local defaultSections = {
             {"Shrug", "/shrug"},
             {"Sigh", "/sigh"},
             {"Smirk", "/smirk"},
-            {"Inhale", "/e takes a slow, deep breath, closing her eyes for a moment.", "/e draws a slow, deep breath as she regards {target}, closing her eyes for a moment."},
+            {"Inhale", "/e takes a slow, deep breath, closing her eyes for a moment."},
             {"Exhale", "/e exhales slowly and opens her eyes.", "/e exhales slowly, opening her eyes to look at {target}."},
             {"Growl", "/e makes a soft growling noise in her throat.", "/e makes a soft growling noise in her throat at {target}."}
         }
@@ -61,7 +61,7 @@ local defaultSections = {
         emotes = {
             {"Says...", "/e says, \"", "/e says to {target}, \""},
             {"Asks...", "/e asks, \"", "/e asks {target}, \""},
-            {"Faint smile", "/e lets a faint smile flirt with the corner of her mouth.", "/e lets a faint smile flirt with the corner of her mouth as she looks at {target}."},
+            {"Faint smile", "/e lets a faint smile flirt with the corner of her mouth.", "/e lets a faint smile flirt with the corner of her mouth as she regards {target}."},
             {"Quiet chuckle", "/e lets out a quiet chuckle.", "/e lets out a quiet chuckle at {target}."},
             {"Smile", "/smile"},
             {"Laugh", "/lol"},
@@ -90,7 +90,7 @@ local defaultSections = {
         emotes = {
             {"Sit", "/sit"},
             {"Stand", "/stand"},
-            {"Stretch", "/e laces her fingers together and stretches skyward, exhaling slowly before letting her arms fall back to her sides.", "/e keeps her attention on {target} as she laces her fingers together and stretches skyward, exhaling slowly before letting her arms fall back to her sides."},
+            {"Stretch", "/e laces her fingers together and stretches skyward, exhaling slowly before letting her arms fall back to her sides."},
             {"Lean", "/lean"},
             {"Bow", "/bow"},
             {"Read", "/read"}
@@ -133,6 +133,8 @@ local defaultSections = {
     }
 }
 
+local MAX_CATEGORIES = #defaultSections
+local MAX_EMOTES = 10
 local selectedCategoryIndex = 1
 
 local function Trim(value)
@@ -148,7 +150,7 @@ local function CopyDefaultCategories()
             emotes = {}
         }
 
-        for emoteIndex = 1, 10 do
+        for emoteIndex = 1, MAX_EMOTES do
             local source = sourceCategory.emotes[emoteIndex]
             category.emotes[emoteIndex] = {
                 label = source and source[1] or "",
@@ -174,7 +176,7 @@ local defaults = {
     y = 100,
     width = 200,
     height = 250,
-    emoteDataVersion = 4
+    emoteDataVersion = 5
 }
 
 local emoteAliases = {
@@ -207,7 +209,7 @@ local isWindowCollapsed = false
 local function NormalizeCategories(categories)
     categories = type(categories) == "table" and categories or {}
 
-    for categoryIndex = 1, 5 do
+    for categoryIndex = 1, MAX_CATEGORIES do
         local category = categories[categoryIndex]
 
         if type(category) ~= "table" then
@@ -218,7 +220,7 @@ local function NormalizeCategories(categories)
         category.name = category.name or ""
         category.emotes = type(category.emotes) == "table" and category.emotes or {}
 
-        for emoteIndex = 1, 10 do
+        for emoteIndex = 1, MAX_EMOTES do
             local emote = category.emotes[emoteIndex]
 
             if type(emote) ~= "table" then
@@ -238,14 +240,14 @@ end
 local function CopyCategories(sourceCategories)
     local copy = {}
 
-    for categoryIndex = 1, 5 do
+    for categoryIndex = 1, MAX_CATEGORIES do
         local sourceCategory = sourceCategories[categoryIndex] or {}
         local category = {
             name = sourceCategory.name or "",
             emotes = {}
         }
 
-        for emoteIndex = 1, 10 do
+        for emoteIndex = 1, MAX_EMOTES do
             local sourceEmote =
                 sourceCategory.emotes and sourceCategory.emotes[emoteIndex] or {}
 
@@ -260,6 +262,28 @@ local function CopyCategories(sourceCategories)
     end
 
     return copy
+end
+
+local legacyDefaultCategoryNames = {
+    THOUGHTS = "Thoughts",
+    REACTIONS = "Reactions",
+    CONVERSATION = "Conversation",
+    GESTURES = "Gestures",
+    POSTURES = "Postures"
+}
+
+local function MigrateLegacyCategoryNameCase(categories)
+    if type(categories) ~= "table" then
+        return
+    end
+
+    for categoryIndex = 1, MAX_CATEGORIES do
+        local category = categories[categoryIndex]
+
+        if category and legacyDefaultCategoryNames[category.name] then
+            category.name = legacyDefaultCategoryNames[category.name]
+        end
+    end
 end
 
 local function InitializeDatabase()
@@ -289,6 +313,11 @@ local function InitializeDatabase()
         -- Refresh the reset source when the supplied defaults change, but
         -- preserve any existing user-edited categories.
         RPEmoteMenuDB.defaultCategories = CopyCategories(suppliedValues)
+
+        if RPEmoteMenuDB.categories then
+            MigrateLegacyCategoryNameCase(RPEmoteMenuDB.categories)
+        end
+
         RPEmoteMenuDB.categories = NormalizeCategories(
             RPEmoteMenuDB.categories or CopyCategories(suppliedValues)
         )
@@ -297,6 +326,10 @@ local function InitializeDatabase()
         RPEmoteMenuDB.defaultCategories = NormalizeCategories(
             RPEmoteMenuDB.defaultCategories or CopyDefaultCategories()
         )
+
+        if RPEmoteMenuDB.categories then
+            MigrateLegacyCategoryNameCase(RPEmoteMenuDB.categories)
+        end
 
         RPEmoteMenuDB.categories = NormalizeCategories(
             RPEmoteMenuDB.categories
@@ -308,10 +341,22 @@ end
 local function ResetCategoryToDefaults(categoryIndex)
     -- Rebuild only this category from the defaults supplied in this Lua file.
     local suppliedDefaults = CopyDefaultCategories()
-    RPEmoteMenuDB.defaultCategories[categoryIndex] =
-        CopyCategories(suppliedDefaults)[categoryIndex]
-    RPEmoteMenuDB.categories[categoryIndex] =
-        CopyCategories(suppliedDefaults)[categoryIndex]
+    local defaultCategory = suppliedDefaults[categoryIndex]
+
+    RPEmoteMenuDB.defaultCategories[categoryIndex] = CopyCategories(suppliedDefaults)[categoryIndex]
+    RPEmoteMenuDB.categories[categoryIndex] = {
+        name = defaultCategory.name,
+        emotes = {}
+    }
+
+    for emoteIndex = 1, MAX_EMOTES do
+        local sourceEmote = defaultCategory.emotes[emoteIndex]
+        RPEmoteMenuDB.categories[categoryIndex].emotes[emoteIndex] = {
+            label = sourceEmote.label,
+            defaultCommand = sourceEmote.defaultCommand,
+            targetedCommand = sourceEmote.targetedCommand
+        }
+    end
 
     if emoteEditorRefresh then
         emoteEditorRefresh(categoryIndex)
@@ -477,8 +522,8 @@ local function GetContainerButton()
     local button = CreateFrame("Button", nil, ScrollChild)
     button:SetSize(210, 20)
 
-    button.Text = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    button.Text:SetPoint("LEFT", button, "LEFT", 2, 0)
+    button.Text = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    button.Text:SetPoint("LEFT", button, "LEFT", 14, 0)
     button.Text:SetJustifyH("LEFT")
 
     table.insert(buttonsPool, button)
@@ -488,6 +533,34 @@ end
 local function GetCurrentCategory(categoryIndex)
     local categories = RPEmoteMenuDB and RPEmoteMenuDB.categories
     return categories and categories[categoryIndex] or nil
+end
+
+local function IsCategoryVisible(categoryIndex)
+    local category = GetCurrentCategory(categoryIndex)
+    return category and Trim(category.name) ~= ""
+end
+
+local function FindVisibleCategory(startIndex, direction)
+    for step = 1, MAX_CATEGORIES do
+        local categoryIndex =
+            ((startIndex - 1 + (direction * step)) % MAX_CATEGORIES) + 1
+
+        if IsCategoryVisible(categoryIndex) then
+            return categoryIndex
+        end
+    end
+
+    return nil
+end
+
+local function FindFirstVisibleCategory()
+    for categoryIndex = 1, MAX_CATEGORIES do
+        if IsCategoryVisible(categoryIndex) then
+            return categoryIndex
+        end
+    end
+
+    return nil
 end
 
 local function IsEmoteVisible(emote)
@@ -503,7 +576,7 @@ local function GetVisibleEmotes(category)
         return visibleEmotes
     end
 
-    for emoteIndex = 1, 10 do
+    for emoteIndex = 1, MAX_EMOTES do
         local emote = category.emotes and category.emotes[emoteIndex]
 
         if IsEmoteVisible(emote) then
@@ -521,46 +594,55 @@ function UpdateMenu()
         button:SetScript("OnClick", nil)
     end
 
-    if selectedCategoryIndex < 1 then
-        selectedCategoryIndex = 5
-    elseif selectedCategoryIndex > 5 then
-        selectedCategoryIndex = 1
+    if not IsCategoryVisible(selectedCategoryIndex) then
+        selectedCategoryIndex = FindFirstVisibleCategory()
     end
 
-    local previousIndex = selectedCategoryIndex - 1
-    local nextIndex = selectedCategoryIndex + 1
-
-    if previousIndex < 1 then
-        previousIndex = 5
-    end
-
-    if nextIndex > 5 then
-        nextIndex = 1
-    end
-
-    local category = GetCurrentCategory(selectedCategoryIndex)
-
-    local function GetCategoryDisplayName(categoryIndex)
-        local sourceCategory = GetCurrentCategory(categoryIndex)
-        local name = Trim(sourceCategory and sourceCategory.name)
-
-        if name == "" then
-            return "Category " .. categoryIndex
+    if not selectedCategoryIndex then
+        if PreviousCategoryTab then
+            PreviousCategoryTab:Hide()
         end
 
-        return name
+        if CurrentCategoryTab then
+            CurrentCategoryTab.Text:SetText("No Categories")
+            CurrentCategoryTab:Show()
+        end
+
+        if NextCategoryTab then
+            NextCategoryTab:Hide()
+        end
+
+        ScrollChild:SetHeight(1)
+        return
     end
 
+    local previousIndex = FindVisibleCategory(selectedCategoryIndex, -1)
+    local nextIndex = FindVisibleCategory(selectedCategoryIndex, 1)
+    local category = GetCurrentCategory(selectedCategoryIndex)
+
     if PreviousCategoryTab then
-        PreviousCategoryTab.Text:SetText(GetCategoryDisplayName(previousIndex))
+        if previousIndex and previousIndex ~= selectedCategoryIndex then
+            PreviousCategoryTab.Text:SetText(GetCurrentCategory(previousIndex).name)
+            PreviousCategoryTab.categoryIndex = previousIndex
+            PreviousCategoryTab:Show()
+        else
+            PreviousCategoryTab:Hide()
+        end
     end
 
     if CurrentCategoryTab then
-        CurrentCategoryTab.Text:SetText(GetCategoryDisplayName(selectedCategoryIndex))
+        CurrentCategoryTab.Text:SetText(category.name)
+        CurrentCategoryTab:Show()
     end
 
     if NextCategoryTab then
-        NextCategoryTab.Text:SetText(GetCategoryDisplayName(nextIndex))
+        if nextIndex and nextIndex ~= selectedCategoryIndex then
+            NextCategoryTab.Text:SetText(GetCurrentCategory(nextIndex).name)
+            NextCategoryTab.categoryIndex = nextIndex
+            NextCategoryTab:Show()
+        else
+            NextCategoryTab:Hide()
+        end
     end
 
     local visibleEmotes = GetVisibleEmotes(category)
@@ -580,7 +662,7 @@ function UpdateMenu()
         end)
         emoteButton:Show()
 
-        dynamicY = dynamicY + 20
+        dynamicY = dynamicY + 22
     end
 
     ScrollChild:SetHeight(math.max(dynamicY, 1))
@@ -665,14 +747,14 @@ local function CreateMainWindow()
 
     local title = MainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 10, -10)
-    title:SetText("RP Emote Menu 1.3")
+    title:SetText("RP Emote Menu 1.4")
     title:SetTextColor(1, 1, 1, 1)
 
     local function CreateCategoryTab()
         local tab = CreateFrame("Button", nil, MainFrame)
         tab:SetHeight(24)
 
-        tab.Text = tab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        tab.Text = tab:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         tab.Text:SetPoint("CENTER")
         tab.Text:SetJustifyH("CENTER")
 
@@ -683,9 +765,11 @@ local function CreateMainWindow()
     PreviousCategoryTab:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 8, -32)
     PreviousCategoryTab:SetPoint("TOPRIGHT", MainFrame, "TOP", -42, -32)
     PreviousCategoryTab.Text:SetTextColor(0.55, 0.55, 0.55)
-    PreviousCategoryTab:SetScript("OnClick", function()
-        selectedCategoryIndex = selectedCategoryIndex - 1
-        UpdateMenu()
+    PreviousCategoryTab:SetScript("OnClick", function(self)
+        if self.categoryIndex then
+            selectedCategoryIndex = self.categoryIndex
+            UpdateMenu()
+        end
     end)
 
     CurrentCategoryTab = CreateCategoryTab()
@@ -697,9 +781,11 @@ local function CreateMainWindow()
     NextCategoryTab:SetPoint("TOPLEFT", MainFrame, "TOP", 42, -32)
     NextCategoryTab:SetPoint("TOPRIGHT", MainFrame, "TOPRIGHT", -8, -32)
     NextCategoryTab.Text:SetTextColor(0.55, 0.55, 0.55)
-    NextCategoryTab:SetScript("OnClick", function()
-        selectedCategoryIndex = selectedCategoryIndex + 1
-        UpdateMenu()
+    NextCategoryTab:SetScript("OnClick", function(self)
+        if self.categoryIndex then
+            selectedCategoryIndex = self.categoryIndex
+            UpdateMenu()
+        end
     end)
 
     ScrollFrame = CreateFrame("ScrollFrame", nil, MainFrame, "UIPanelScrollFrameTemplate")
@@ -893,12 +979,12 @@ local function CreateAboutPanel()
     description:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -12)
     description:SetWidth(620)
     description:SetJustifyH("LEFT")
-    description:SetText("A configurable, collapsible quick-emote menu for roleplaying. Create up to five categories with ten emotes in each category, including optional target-specific commands.")
+    description:SetText("A configurable, collapsible quick-emote menu for roleplaying. Create up to ten categories with ten emotes in each category, including optional target-specific commands.")
 
     local details = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     details:SetPoint("TOPLEFT", description, "BOTTOMLEFT", 0, -24)
     details:SetJustifyH("LEFT")
-    details:SetText("Version 1.3\nAuthor  Brandon Blackmoor\nCategory  Roleplay\nLicense  GPL-3.0")
+    details:SetText("Version 1.4\nAuthor  Brandon Blackmoor\nCategory  Roleplay\nLicense  GPL-3.0")
 
     return panel
 end
@@ -995,7 +1081,7 @@ local function CreateCategorySettingsPanel(categoryIndex)
 
     y = y - 28
 
-    for emoteIndex = 1, 10 do
+    for emoteIndex = 1, MAX_EMOTES do
         local emoteNumber = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         emoteNumber:SetPoint("TOPLEFT", content, "TOPLEFT", 28, y)
         emoteNumber:SetText("Emote " .. emoteIndex)
@@ -1069,7 +1155,7 @@ local function CreateSettingsPanel()
         "General"
     )
 
-    for categoryIndex = 1, 5 do
+    for categoryIndex = 1, MAX_CATEGORIES do
         local panel = CreateCategorySettingsPanel(categoryIndex)
         categoryPanels[categoryIndex] = panel
         categorySettingsCategories[categoryIndex] = Settings.RegisterCanvasLayoutSubcategory(
