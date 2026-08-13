@@ -52,8 +52,7 @@ Target tokens are supported in custom `/e` commands. They are replaced by RP Emo
 The **Targeted Command** is used only when another unit is targeted.
 
 ## Screenshot
-
-<img width="299" height="392" alt="RP Emote Menu" src="https://github.com/user-attachments/assets/521b118e-d581-4186-8a34-a6b914fc86e7" />
+<img width="418" height="426" alt="image" src="https://github.com/user-attachments/assets/7d182745-9eff-4da4-b215-408de047143a" />
 
 ------------------------------------------------------------------------
 
