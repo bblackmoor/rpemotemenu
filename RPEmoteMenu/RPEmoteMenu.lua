@@ -25,8 +25,9 @@ local ADDON_NAME = ...
 -- is sent and are therefore easier to use consistently in custom emotes.
 
 local defaultSections = {
+    -- Category 1
     {
-        name = "THOUGHTS",
+        name = "Thoughts",
         emotes = {
             {"Blank", "/blank"},
             {"Gaze", "/gaze"},
@@ -39,8 +40,9 @@ local defaultSections = {
         }
     },
 
+    -- Category 2
     {
-        name = "REACTIONS",
+        name = "Reactions",
         emotes = {
             {"Blink", "/blink"},
             {"Nod", "/nod"},
@@ -53,8 +55,9 @@ local defaultSections = {
         }
     },
 
+    -- Category 3
     {
-        name = "CONVERSATION",
+        name = "Conversation",
         emotes = {
             {"Says...", "/e says, \"", "/e says to {target}, \""},
             {"Asks...", "/e asks, \"", "/e asks {target}, \""},
@@ -67,8 +70,9 @@ local defaultSections = {
         }
     },
 
+    -- Category 4
     {
-        name = "GESTURES",
+        name = "Gestures",
         emotes = {
             {"Raise Hand", "/raise"},
             {"Point", "/point"},
@@ -80,8 +84,9 @@ local defaultSections = {
         }
     },
 
+    -- Category 5
     {
-        name = "POSTURES",
+        name = "Postures",
         emotes = {
             {"Sit", "/sit"},
             {"Stand", "/stand"},
@@ -89,6 +94,41 @@ local defaultSections = {
             {"Lean", "/lean"},
             {"Bow", "/bow"},
             {"Read", "/read"}
+        }
+    },
+
+    -- Category 6
+    {
+        name = "",
+        emotes = {
+        }
+    },
+
+    -- Category 7
+    {
+        name = "",
+        emotes = {
+        }
+    },
+
+    -- Category 8
+    {
+        name = "",
+        emotes = {
+        }
+    },
+
+    -- Category 9
+    {
+        name = "",
+        emotes = {
+        }
+    },
+
+    -- Category 10
+    {
+        name = "",
+        emotes = {
         }
     }
 }
@@ -132,8 +172,8 @@ local defaults = {
     relativePoint = "CENTER",
     x = 0,
     y = 100,
-    width = 250,
-    height = 350,
+    width = 200,
+    height = 250,
     emoteDataVersion = 4
 }
 
@@ -143,19 +183,19 @@ local emoteAliases = {
 }
 
 local collapsedHeight = 30
-local minimumWidth = 190
+local minimumWidth = 180
 local minimumHeight = 180
-local maximumWidth = 600
-local maximumHeight = 800
+local maximumWidth = 400
+local maximumHeight = 400
 
 local MainFrame
 local ScrollFrame
 local ScrollChild
 local CollapseBtn
 local ResizeGrip
-local PreviousCategoryBtn
-local NextCategoryBtn
-local CategoryLabel
+local PreviousCategoryTab
+local CurrentCategoryTab
+local NextCategoryTab
 local settingsCategory
 local generalSettingsCategory
 local categorySettingsCategories = {}
@@ -487,15 +527,40 @@ function UpdateMenu()
         selectedCategoryIndex = 1
     end
 
-    local category = GetCurrentCategory(selectedCategoryIndex)
-    local categoryName = Trim(category and category.name)
+    local previousIndex = selectedCategoryIndex - 1
+    local nextIndex = selectedCategoryIndex + 1
 
-    if CategoryLabel then
-        if categoryName == "" then
-            CategoryLabel:SetText("Category " .. selectedCategoryIndex)
-        else
-            CategoryLabel:SetText(categoryName)
+    if previousIndex < 1 then
+        previousIndex = 5
+    end
+
+    if nextIndex > 5 then
+        nextIndex = 1
+    end
+
+    local category = GetCurrentCategory(selectedCategoryIndex)
+
+    local function GetCategoryDisplayName(categoryIndex)
+        local sourceCategory = GetCurrentCategory(categoryIndex)
+        local name = Trim(sourceCategory and sourceCategory.name)
+
+        if name == "" then
+            return "Category " .. categoryIndex
         end
+
+        return name
+    end
+
+    if PreviousCategoryTab then
+        PreviousCategoryTab.Text:SetText(GetCategoryDisplayName(previousIndex))
+    end
+
+    if CurrentCategoryTab then
+        CurrentCategoryTab.Text:SetText(GetCategoryDisplayName(selectedCategoryIndex))
+    end
+
+    if NextCategoryTab then
+        NextCategoryTab.Text:SetText(GetCategoryDisplayName(nextIndex))
     end
 
     local visibleEmotes = GetVisibleEmotes(category)
@@ -538,16 +603,16 @@ local function UpdateWindowCollapse()
 
     if isWindowCollapsed then
         ScrollFrame:Hide()
-        PreviousCategoryBtn:Hide()
-        NextCategoryBtn:Hide()
-        CategoryLabel:Hide()
+        PreviousCategoryTab:Hide()
+        CurrentCategoryTab:Hide()
+        NextCategoryTab:Hide()
         MainFrame:SetHeight(collapsedHeight)
         CollapseBtn:SetText("+")
     else
         MainFrame:SetSize(RPEmoteMenuDB.width, RPEmoteMenuDB.height)
-        PreviousCategoryBtn:Show()
-        NextCategoryBtn:Show()
-        CategoryLabel:Show()
+        PreviousCategoryTab:Show()
+        CurrentCategoryTab:Show()
+        NextCategoryTab:Show()
         ScrollFrame:Show()
         CollapseBtn:SetText("-")
         UpdateMenu()
@@ -603,31 +668,42 @@ local function CreateMainWindow()
     title:SetText("RP Emote Menu 1.3")
     title:SetTextColor(1, 1, 1, 1)
 
-    PreviousCategoryBtn = CreateFrame("Button", nil, MainFrame, "UIPanelButtonTemplate")
-    PreviousCategoryBtn:SetSize(24, 20)
-    PreviousCategoryBtn:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 8, -34)
-    PreviousCategoryBtn:SetText("<")
-    PreviousCategoryBtn:SetScript("OnClick", function()
+    local function CreateCategoryTab()
+        local tab = CreateFrame("Button", nil, MainFrame)
+        tab:SetHeight(24)
+
+        tab.Text = tab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        tab.Text:SetPoint("CENTER")
+        tab.Text:SetJustifyH("CENTER")
+
+        return tab
+    end
+
+    PreviousCategoryTab = CreateCategoryTab()
+    PreviousCategoryTab:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 8, -32)
+    PreviousCategoryTab:SetPoint("TOPRIGHT", MainFrame, "TOP", -42, -32)
+    PreviousCategoryTab.Text:SetTextColor(0.55, 0.55, 0.55)
+    PreviousCategoryTab:SetScript("OnClick", function()
         selectedCategoryIndex = selectedCategoryIndex - 1
         UpdateMenu()
     end)
 
-    NextCategoryBtn = CreateFrame("Button", nil, MainFrame, "UIPanelButtonTemplate")
-    NextCategoryBtn:SetSize(24, 20)
-    NextCategoryBtn:SetPoint("TOPRIGHT", MainFrame, "TOPRIGHT", -8, -34)
-    NextCategoryBtn:SetText(">")
-    NextCategoryBtn:SetScript("OnClick", function()
+    CurrentCategoryTab = CreateCategoryTab()
+    CurrentCategoryTab:SetPoint("TOPLEFT", MainFrame, "TOP", -38, -32)
+    CurrentCategoryTab:SetPoint("TOPRIGHT", MainFrame, "TOP", 38, -32)
+    CurrentCategoryTab.Text:SetTextColor(1.0, 0.82, 0.0)
+
+    NextCategoryTab = CreateCategoryTab()
+    NextCategoryTab:SetPoint("TOPLEFT", MainFrame, "TOP", 42, -32)
+    NextCategoryTab:SetPoint("TOPRIGHT", MainFrame, "TOPRIGHT", -8, -32)
+    NextCategoryTab.Text:SetTextColor(0.55, 0.55, 0.55)
+    NextCategoryTab:SetScript("OnClick", function()
         selectedCategoryIndex = selectedCategoryIndex + 1
         UpdateMenu()
     end)
 
-    CategoryLabel = MainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    CategoryLabel:SetPoint("LEFT", PreviousCategoryBtn, "RIGHT", 8, 0)
-    CategoryLabel:SetPoint("RIGHT", NextCategoryBtn, "LEFT", -8, 0)
-    CategoryLabel:SetJustifyH("CENTER")
-
     ScrollFrame = CreateFrame("ScrollFrame", nil, MainFrame, "UIPanelScrollFrameTemplate")
-    ScrollFrame:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 5, -60)
+    ScrollFrame:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 5, -62)
     ScrollFrame:SetPoint("BOTTOMRIGHT", MainFrame, "BOTTOMRIGHT", -25, 10)
 
     ScrollChild = CreateFrame("Frame", nil, ScrollFrame)
