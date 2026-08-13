@@ -203,6 +203,8 @@ local maximumHeight = 400
 local MainFrame
 local ScrollFrame
 local ScrollChild
+local ScrollTopIndicator
+local ScrollBottomIndicator
 local CollapseBtn
 local SettingsBtn
 local ResizeGrip
@@ -705,6 +707,46 @@ local function GetVisibleEmotes(category)
     return visibleEmotes
 end
 
+local function UpdateScrollIndicators()
+    if not ScrollFrame or not ScrollChild
+        or not ScrollTopIndicator or not ScrollBottomIndicator
+        or isWindowCollapsed then
+        if ScrollTopIndicator then
+            ScrollTopIndicator:Hide()
+        end
+
+        if ScrollBottomIndicator then
+            ScrollBottomIndicator:Hide()
+        end
+
+        return
+    end
+
+    local viewportHeight = ScrollFrame:GetHeight() or 0
+    local contentHeight = ScrollChild:GetHeight() or 0
+    local scrollOffset = ScrollFrame:GetVerticalScroll() or 0
+    local maxScroll = math.max(contentHeight - viewportHeight, 0)
+    local epsilon = 1
+
+    if maxScroll <= epsilon then
+        ScrollTopIndicator:Hide()
+        ScrollBottomIndicator:Hide()
+        return
+    end
+
+    if scrollOffset > epsilon then
+        ScrollTopIndicator:Show()
+    else
+        ScrollTopIndicator:Hide()
+    end
+
+    if scrollOffset < maxScroll - epsilon then
+        ScrollBottomIndicator:Show()
+    else
+        ScrollBottomIndicator:Hide()
+    end
+end
+
 function UpdateMenu()
     for _, button in ipairs(buttonsPool) do
         button:Hide()
@@ -731,6 +773,8 @@ function UpdateMenu()
         end
 
         ScrollChild:SetHeight(1)
+        ScrollFrame:SetVerticalScroll(0)
+        UpdateScrollIndicators()
         return
     end
 
@@ -784,6 +828,11 @@ function UpdateMenu()
     end
 
     ScrollChild:SetHeight(math.max(dynamicY, 1))
+    ScrollFrame:SetVerticalScroll(0)
+
+    C_Timer.After(0, function()
+        UpdateScrollIndicators()
+    end)
 end
 
 -- WINDOW COLLAPSE
@@ -803,6 +852,8 @@ local function UpdateWindowCollapse()
 
     if isWindowCollapsed then
         ScrollFrame:Hide()
+        ScrollTopIndicator:Hide()
+        ScrollBottomIndicator:Hide()
         PreviousCategoryTab:Hide()
         CurrentCategoryTab:Hide()
         NextCategoryTab:Hide()
@@ -816,6 +867,7 @@ local function UpdateWindowCollapse()
         ScrollFrame:Show()
         CollapseBtn:SetText("-")
         UpdateMenu()
+        C_Timer.After(0, UpdateScrollIndicators)
     end
 
     ApplyMovementLock()
@@ -852,6 +904,10 @@ local function CreateMainWindow()
 
         for _, button in ipairs(buttonsPool) do
             button:SetWidth(math.max(width - 40, 1))
+        end
+
+        if ScrollFrame then
+            C_Timer.After(0, UpdateScrollIndicators)
         end
     end)
 
@@ -913,6 +969,28 @@ local function CreateMainWindow()
     ScrollChild = CreateFrame("Frame", nil, ScrollFrame)
     ScrollChild:SetSize(defaults.width - 30, 1)
     ScrollFrame:SetScrollChild(ScrollChild)
+
+    ScrollTopIndicator = MainFrame:CreateTexture(nil, "OVERLAY")
+    ScrollTopIndicator:SetHeight(1)
+    ScrollTopIndicator:SetPoint("TOPLEFT", ScrollFrame, "TOPLEFT", 6, -1)
+    ScrollTopIndicator:SetPoint("TOPRIGHT", ScrollFrame, "TOPRIGHT", -6, -1)
+    ScrollTopIndicator:SetColorTexture(1.0, 0.82, 0.0, 1.0)
+    ScrollTopIndicator:Hide()
+
+    ScrollBottomIndicator = MainFrame:CreateTexture(nil, "OVERLAY")
+    ScrollBottomIndicator:SetHeight(1)
+    ScrollBottomIndicator:SetPoint("BOTTOMLEFT", ScrollFrame, "BOTTOMLEFT", 6, 1)
+    ScrollBottomIndicator:SetPoint("BOTTOMRIGHT", ScrollFrame, "BOTTOMRIGHT", -6, 1)
+    ScrollBottomIndicator:SetColorTexture(1.0, 0.82, 0.0, 1.0)
+    ScrollBottomIndicator:Hide()
+
+    ScrollFrame:HookScript("OnVerticalScroll", function()
+        C_Timer.After(0, UpdateScrollIndicators)
+    end)
+
+    ScrollFrame:HookScript("OnMouseWheel", function()
+        C_Timer.After(0, UpdateScrollIndicators)
+    end)
 
     CollapseBtn = CreateFrame("Button", nil, MainFrame, "UIPanelButtonTemplate")
     CollapseBtn:SetSize(22, 20)
@@ -1152,6 +1230,7 @@ local function CreateIntegerEditBox(parent, x, y, width, getValue, applyValue)
     editBox:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
     editBox:SetAutoFocus(false)
     editBox:SetNumeric(true)
+    editBox:EnableMouseWheel(true)
     editBox:SetMaxLetters(6)
     editBox:SetFont(STANDARD_TEXT_FONT, 12, "")
     editBox:SetTextColor(1, 1, 1, 1)
@@ -1183,6 +1262,21 @@ local function CreateIntegerEditBox(parent, x, y, width, getValue, applyValue)
     editBox:SetScript("OnEscapePressed", function(self)
         self:RefreshValue()
         self:ClearFocus()
+    end)
+
+    editBox:SetScript("OnMouseWheel", function(self, delta)
+        local currentValue = math.floor(tonumber(getValue()) or 0)
+
+        if delta > 0 then
+            currentValue = currentValue + 1
+        elseif delta < 0 then
+            currentValue = currentValue - 1
+        else
+            return
+        end
+
+        applyValue(currentValue)
+        self:RefreshValue()
     end)
 
     editBox:RefreshValue()
