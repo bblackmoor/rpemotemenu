@@ -27,6 +27,22 @@ local ADDON_NAME = ...
 local defaultSections = {
     -- Category 1
     {
+        name = "Favorites",
+        emotes = {
+            {"Wave", "/wave"}
+            {"Cheer", "/cheer"}
+            {"Clap", "/clap"}
+            {"Cackle", "/cackle"}
+            {"Lean", "/lean"}
+            {"Look", "/look"}
+            {"Pat", "/pat"}
+            {"Point", "/point"}
+            {"Salute", "/salute"}
+        }
+    },
+
+    -- Category 2
+    {
         name = "Thoughts",
         emotes = {
             {"Blank", "/blank"},
@@ -40,7 +56,7 @@ local defaultSections = {
         }
     },
 
-    -- Category 2
+    -- Category 3
     {
         name = "Reactions",
         emotes = {
@@ -55,7 +71,7 @@ local defaultSections = {
         }
     },
 
-    -- Category 3
+    -- Category 4
     {
         name = "Conversation",
         emotes = {
@@ -70,7 +86,7 @@ local defaultSections = {
         }
     },
 
-    -- Category 4
+    -- Category 5
     {
         name = "Gestures",
         emotes = {
@@ -84,7 +100,7 @@ local defaultSections = {
         }
     },
 
-    -- Category 5
+    -- Category 6
     {
         name = "Postures",
         emotes = {
@@ -94,13 +110,6 @@ local defaultSections = {
             {"Lean", "/lean"},
             {"Bow", "/bow"},
             {"Read", "/read"}
-        }
-    },
-
-    -- Category 6
-    {
-        name = "",
-        emotes = {
         }
     },
 
@@ -167,6 +176,7 @@ end
 
 local defaults = {
     locked = false,
+    hideSettingsGear = false,
     showAtLogin = true,
     rememberMinimized = true,
     minimized = false,
@@ -194,6 +204,7 @@ local MainFrame
 local ScrollFrame
 local ScrollChild
 local CollapseBtn
+local SettingsBtn
 local ResizeGrip
 local PreviousCategoryTab
 local CurrentCategoryTab
@@ -441,6 +452,18 @@ local function ApplyMovementLock()
         else
             ResizeGrip:Hide()
         end
+    end
+end
+
+local function ApplySettingsGearVisibility()
+    if not SettingsBtn then
+        return
+    end
+
+    if RPEmoteMenuDB.hideSettingsGear then
+        SettingsBtn:Hide()
+    else
+        SettingsBtn:Show()
     end
 end
 
@@ -807,7 +830,7 @@ local function CreateMainWindow()
         UpdateWindowCollapse()
     end)
 
-    local SettingsBtn = CreateFrame("Button", nil, MainFrame)
+    SettingsBtn = CreateFrame("Button", nil, MainFrame)
     SettingsBtn:SetSize(20, 20)
     SettingsBtn:SetPoint("RIGHT", CollapseBtn, "LEFT", -7, 0)
 
@@ -848,6 +871,7 @@ local function CreateMainWindow()
     RestoreWindowSize()
     RestoreWindowPosition()
     ApplyMovementLock()
+    ApplySettingsGearVisibility()
 
     if RPEmoteMenuDB.rememberMinimized then
         isWindowCollapsed = RPEmoteMenuDB.minimized
@@ -1039,11 +1063,18 @@ local function CreateGeneralSettingsPanel()
             ApplyMovementLock()
         end)
 
-    CreateCheckbox(panel, "Show the addon at login", -105,
+    CreateCheckbox(panel, "Hide settings gear icon", -105,
+        function() return RPEmoteMenuDB.hideSettingsGear end,
+        function(value)
+            RPEmoteMenuDB.hideSettingsGear = value
+            ApplySettingsGearVisibility()
+        end)
+
+    CreateCheckbox(panel, "Show the addon at login", -140,
         function() return RPEmoteMenuDB.showAtLogin end,
         function(value) RPEmoteMenuDB.showAtLogin = value end)
 
-    CreateCheckbox(panel, "Remember whether the main window was minimized", -140,
+    CreateCheckbox(panel, "Remember whether the main window was minimized", -175,
         function() return RPEmoteMenuDB.rememberMinimized end,
         function(value)
             RPEmoteMenuDB.rememberMinimized = value
@@ -1052,7 +1083,7 @@ local function CreateGeneralSettingsPanel()
 
     local resetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     resetButton:SetSize(230, 24)
-    resetButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -190)
+    resetButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -225)
     resetButton:SetText("Reset Window Position and Size")
     resetButton:SetScript("OnClick", ResetWindowPosition)
 
