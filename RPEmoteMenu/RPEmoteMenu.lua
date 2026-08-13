@@ -174,7 +174,7 @@ local defaults = {
     relativePoint = "CENTER",
     x = 0,
     y = 100,
-    width = 200,
+    width = 250,
     height = 250,
     emoteDataVersion = 5
 }
@@ -185,8 +185,8 @@ local emoteAliases = {
 }
 
 local collapsedHeight = 30
-local minimumWidth = 180
-local minimumHeight = 180
+local minimumWidth = 250
+local minimumHeight = 150
 local maximumWidth = 400
 local maximumHeight = 400
 
@@ -202,6 +202,7 @@ local settingsCategory
 local generalSettingsCategory
 local categorySettingsCategories = {}
 local emoteEditorRefresh
+local OpenSettings
 local buttonsPool = {}
 local isWindowCollapsed = false
 
@@ -327,10 +328,6 @@ local function InitializeDatabase()
             RPEmoteMenuDB.defaultCategories or CopyDefaultCategories()
         )
 
-        if RPEmoteMenuDB.categories then
-            MigrateLegacyCategoryNameCase(RPEmoteMenuDB.categories)
-        end
-
         RPEmoteMenuDB.categories = NormalizeCategories(
             RPEmoteMenuDB.categories
                 or CopyCategories(RPEmoteMenuDB.defaultCategories)
@@ -410,6 +407,8 @@ local function SaveWindowSize()
 end
 
 local function RestoreWindowSize()
+    RPEmoteMenuDB.width = math.max(minimumWidth, math.min(maximumWidth, RPEmoteMenuDB.width))
+    RPEmoteMenuDB.height = math.max(minimumHeight, math.min(maximumHeight, RPEmoteMenuDB.height))
     MainFrame:SetSize(RPEmoteMenuDB.width, RPEmoteMenuDB.height)
 end
 
@@ -763,7 +762,7 @@ local function CreateMainWindow()
 
     PreviousCategoryTab = CreateCategoryTab()
     PreviousCategoryTab:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 8, -32)
-    PreviousCategoryTab:SetPoint("TOPRIGHT", MainFrame, "TOP", -42, -32)
+    PreviousCategoryTab:SetPoint("TOPRIGHT", MainFrame, "TOP", -50, -32)
     PreviousCategoryTab.Text:SetTextColor(0.55, 0.55, 0.55)
     PreviousCategoryTab:SetScript("OnClick", function(self)
         if self.categoryIndex then
@@ -773,12 +772,12 @@ local function CreateMainWindow()
     end)
 
     CurrentCategoryTab = CreateCategoryTab()
-    CurrentCategoryTab:SetPoint("TOPLEFT", MainFrame, "TOP", -38, -32)
-    CurrentCategoryTab:SetPoint("TOPRIGHT", MainFrame, "TOP", 38, -32)
+    CurrentCategoryTab:SetPoint("TOPLEFT", MainFrame, "TOP", -42, -32)
+    CurrentCategoryTab:SetPoint("TOPRIGHT", MainFrame, "TOP", 42, -32)
     CurrentCategoryTab.Text:SetTextColor(1.0, 0.82, 0.0)
 
     NextCategoryTab = CreateCategoryTab()
-    NextCategoryTab:SetPoint("TOPLEFT", MainFrame, "TOP", 42, -32)
+    NextCategoryTab:SetPoint("TOPLEFT", MainFrame, "TOP", 50, -32)
     NextCategoryTab:SetPoint("TOPRIGHT", MainFrame, "TOPRIGHT", -8, -32)
     NextCategoryTab.Text:SetTextColor(0.55, 0.55, 0.55)
     NextCategoryTab:SetScript("OnClick", function(self)
@@ -806,6 +805,27 @@ local function CreateMainWindow()
 
         isWindowCollapsed = not isWindowCollapsed
         UpdateWindowCollapse()
+    end)
+
+    local SettingsBtn = CreateFrame("Button", nil, MainFrame)
+    SettingsBtn:SetSize(20, 20)
+    SettingsBtn:SetPoint("RIGHT", CollapseBtn, "LEFT", -7, 0)
+
+    SettingsBtn:SetNormalTexture("Interface\\Buttons\\UI-OptionsButton")
+    SettingsBtn:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+
+    SettingsBtn:SetScript("OnClick", function()
+        OpenSettings()
+    end)
+
+    SettingsBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("RP Emote Menu Settings")
+        GameTooltip:Show()
+    end)
+
+    SettingsBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
     end)
 
     ResizeGrip = CreateFrame("Button", nil, MainFrame)
@@ -983,8 +1003,19 @@ local function CreateAboutPanel()
 
     local details = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     details:SetPoint("TOPLEFT", description, "BOTTOMLEFT", 0, -24)
+    details:SetWidth(620)
     details:SetJustifyH("LEFT")
-    details:SetText("Version 1.4\nAuthor  Brandon Blackmoor\nCategory  Roleplay\nLicense  GPL-3.0")
+    details:SetText(
+        "Version 1.4\n" ..
+        "Author  Brandon Blackmoor\n" ..
+        "Category  Roleplay\n" ..
+        "License  GPL-3.0\n\n" ..
+        "Slash Commands\n" ..
+        "/emotes - Show or hide the RP Emote Menu.\n" ..
+        "/emotes config - Open the addon settings.\n" ..
+        "/emotes options - Open the addon settings.\n" ..
+        "/emotes settings - Open the addon settings."
+    )
 
     return panel
 end
@@ -1182,7 +1213,7 @@ local function CreateSettingsPanel()
     end
 end
 
-local function OpenSettings()
+OpenSettings = function()
     if generalSettingsCategory then
         Settings.OpenToCategory(generalSettingsCategory:GetID())
     elseif settingsCategory then
