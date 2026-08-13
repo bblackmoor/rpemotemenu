@@ -1045,16 +1045,22 @@ local function CreateAboutPanel()
     details:SetJustifyH("LEFT")
     details:SetText(
         "Version 1.4\n" ..
-        "Author  Brandon Blackmoor\n" ..
+        "Author    Brandon Blackmoor\n" ..
         "Category  Roleplay\n" ..
-        "License  GPL-3.0\n\n" ..
-        "Slash Commands\n" ..
-        "/emotes - Show or hide the RP Emote Menu.\n" ..
-        "/emotes config - Open the addon settings.\n" ..
-        "/emotes options - Open the addon settings.\n" ..
-        "/emotes settings - Open the addon settings."
-    )
+        "License   GPL-3.0\n\n" ..
 
+        "Slash Commands\n" ..
+        "    /emotes - Show or hide the RP Emote Menu.\n" ..
+        "    /emotes config - Open the addon settings.\n" ..
+        "    /emotes options - Open the addon settings.\n" ..
+        "    /emotes settings - Open the addon settings.\n\n" ..
+
+        "Tokens supported by /e commands\n" ..
+        "    {target}       Target's name without the realm.\n" ..
+        "    {target-full}  Target's name including the realm when applicable.\n" ..
+        "    {player}       Your character's name without the realm.\n" ..
+        "    {player-full}  Your character's name including the realm when applicable."
+    )
     return panel
 end
 
