@@ -52,11 +52,12 @@ Target tokens are supported in custom `/e` commands. They are replaced by RP Emo
 The **Targeted Command** is used only when another unit is targeted.
 
 ## Screenshot
+
 <img width="418" height="426" alt="image" src="https://github.com/user-attachments/assets/7d182745-9eff-4da4-b215-408de047143a" />
 
 ------------------------------------------------------------------------
 
-Copyright © 2026 Brandon Blackmoor (<bblackmoor@blackgate.net>)\
-Licensed under the GNU General Public License v3.0:\
-https://www.gnu.org/licenses/gpl-3.0.en.html\
+Copyright © 2026 Brandon Blackmoor (<bblackmoor@blackgate.net>)  
+Licensed under the GNU General Public License v3.0:  
+https://www.gnu.org/licenses/gpl-3.0.en.html  
 Source: https://github.com/bblackmoor/rpemotemenu
