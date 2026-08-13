@@ -373,6 +373,20 @@ local function ResetCategoryToDefaults(categoryIndex)
     UpdateMenu()
 end
 
+local function ResetAllCategoriesToDefaults()
+    local suppliedDefaults = CopyDefaultCategories()
+
+    RPEmoteMenuDB.defaultCategories = CopyCategories(suppliedDefaults)
+    RPEmoteMenuDB.categories = CopyCategories(suppliedDefaults)
+
+    if emoteEditorRefresh then
+        emoteEditorRefresh()
+    end
+
+    selectedCategoryIndex = 1
+    UpdateMenu()
+end
+
 local function SaveWindowPosition()
     local left = MainFrame:GetLeft()
     local top = MainFrame:GetTop()
@@ -1086,6 +1100,12 @@ local function CreateGeneralSettingsPanel()
     resetButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -225)
     resetButton:SetText("Reset Window Position and Size")
     resetButton:SetScript("OnClick", ResetWindowPosition)
+
+    local resetAllButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    resetAllButton:SetSize(260, 24)
+    resetAllButton:SetPoint("TOPLEFT", resetButton, "BOTTOMLEFT", 0, -10)
+    resetAllButton:SetText("Reset All Default Categories and Emotes")
+    resetAllButton:SetScript("OnClick", ResetAllCategoriesToDefaults)
 
     return panel
 end
