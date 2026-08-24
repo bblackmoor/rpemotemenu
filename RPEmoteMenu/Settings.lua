@@ -11,6 +11,7 @@ local MAX_EMOTES = addon.MAX_EMOTES
 local settingsCategory
 local generalSettingsCategory
 local categorySettingsCategories = {}
+local resetAllCategoriesButton
 
 -- SETTINGS PANEL
 local function CreateCheckbox(parent, label, y, getValue, setValue)
@@ -68,6 +69,10 @@ local function CreateLabeledEditBox(
     end
 
     local function SetCurrentValue(self, value)
+        if not Database.CanEditActiveProfile() then
+            return false
+        end
+
         local category = Database.GetCategory(self.categoryIndex)
 
         if self.emoteIndex then
@@ -75,6 +80,8 @@ local function CreateLabeledEditBox(
         else
             category[self.fieldName] = value
         end
+
+        return true
     end
 
     local function DisplayCurrentValue(self)
@@ -88,11 +95,20 @@ local function CreateLabeledEditBox(
         DisplayCurrentValue(self)
         self:SetCursorPosition(0)
         self:HighlightText(0, 0)
+
+        if Database.CanEditActiveProfile() then
+            self:Enable()
+            self:SetTextColor(1, 1, 1, 1)
+        else
+            self:ClearFocus()
+            self:Disable()
+            self:SetTextColor(0.65, 0.65, 0.65, 1)
+        end
     end
 
     -- Blizzard's Settings panel can clear edit-box text during layout.
-    -- Reapply the saved value after the box is shown, and keep it synchronized
-    -- while it is not being actively edited.
+    -- Reapply the saved value after the box is shown. Later profile changes and
+    -- reset actions refresh their editors explicitly, avoiding per-frame polling.
     editBox:SetScript("OnShow", function(self)
         DisplayCurrentValue(self)
         self:SetCursorPosition(0)
@@ -105,15 +121,12 @@ local function CreateLabeledEditBox(
         end)
     end)
 
-    editBox:SetScript("OnUpdate", function(self)
-        if not self:HasFocus() then
+    local function Commit(self)
+        if SetCurrentValue(self, self:GetText() or "") then
+            MainWindow.UpdateMenu()
+        else
             DisplayCurrentValue(self)
         end
-    end)
-
-    local function Commit(self)
-        SetCurrentValue(self, self:GetText() or "")
-        MainWindow.UpdateMenu()
     end
 
     editBox:SetScript("OnTextChanged", function(self, userInput)
@@ -154,7 +167,7 @@ local function CreateAboutPanel()
     details:SetWidth(620)
     details:SetJustifyH("LEFT")
     details:SetText(
-        "Version 1.6\n" ..
+        "Version " .. addon.VERSION .. "\n" ..
         "Author    Brandon Blackmoor\n" ..
         "Category  Roleplay\n" ..
         "License   GPL-3.0\n\n" ..
@@ -166,10 +179,8 @@ local function CreateAboutPanel()
         "    /rpem settings - Open the addon settings.\n\n" ..
 
         "Tokens supported by /e commands\n" ..
-        "    {target}       Target's name without the realm.\n" ..
-        "    {target-full}  Target's name including the realm when applicable.\n" ..
-        "    {player}       Your character's name without the realm.\n" ..
-        "    {player-full}  Your character's name including the realm when applicable."
+        "    {target}  Target's name without the realm.\n" ..
+        "    {player}  Your character's name without the realm."
     )
     return panel
 end
@@ -361,11 +372,12 @@ local function CreateGeneralSettingsPanel()
     resetButton:SetText("Reset Window Position and Size")
     resetButton:SetScript("OnClick", MainWindow.ResetWindowPosition)
 
-    local resetAllButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    resetAllButton:SetSize(260, 24)
-    resetAllButton:SetPoint("TOPLEFT", resetButton, "BOTTOMLEFT", 0, -10)
-    resetAllButton:SetText("Reset All Default Categories and Emotes")
-    resetAllButton:SetScript("OnClick", Database.ResetAllCategoriesToDefaults)
+    resetAllCategoriesButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    resetAllCategoriesButton:SetSize(260, 24)
+    resetAllCategoriesButton:SetPoint("TOPLEFT", resetButton, "BOTTOMLEFT", 0, -10)
+    resetAllCategoriesButton:SetText("Reset All Categories and Emotes")
+    resetAllCategoriesButton:SetEnabled(Database.CanEditActiveProfile())
+    resetAllCategoriesButton:SetScript("OnClick", Database.ResetAllCategoriesToDefaults)
 
     return panel
 end
@@ -389,6 +401,7 @@ local function CreateCategorySettingsPanel(categoryIndex)
     resetButton:SetSize(190, 24)
     resetButton:SetPoint("TOPRIGHT", content, "TOPRIGHT", -90, -12)
     resetButton:SetText("Reset Category to Defaults")
+    resetButton:SetEnabled(Database.CanEditActiveProfile())
     resetButton:SetScript("OnClick", function()
         Database.ResetCategoryToDefaults(categoryIndex)
     end)
@@ -399,10 +412,9 @@ local function CreateCategorySettingsPanel(categoryIndex)
     placeholderText:SetJustifyH("LEFT")
     placeholderText:SetText(
         "{target} - Target's name without the realm.\n" ..
-        "{target-full} - Target's name including the realm.\n" ..
         "{player} - Your character's name without the realm.\n" ..
-        "{player-full} - Your character's name including the realm.\n\n" ..
-        "Targeted Command is used only when another unit is targeted."
+        "Targeted Command is used only when another unit is targeted.\n\n" ..
+        "The Default profile cannot be edited."
     )
     placeholderText:SetTextColor(0.8, 0.8, 0.8)
 
@@ -471,6 +483,8 @@ local function CreateCategorySettingsPanel(categoryIndex)
     content:SetHeight(-y + 20)
 
     panel.RefreshEditors = function()
+        resetButton:SetEnabled(Database.CanEditActiveProfile())
+
         for _, editBox in ipairs(editors) do
             editBox:RefreshFromDatabase()
         end
@@ -509,6 +523,10 @@ function AddonSettings.CreateSettingsPanel()
     end
 
     AddonSettings.RefreshEditors = function(categoryIndex)
+        if resetAllCategoriesButton then
+            resetAllCategoriesButton:SetEnabled(Database.CanEditActiveProfile())
+        end
+
         if categoryIndex then
             local panel = categoryPanels[categoryIndex]
             if panel and panel.RefreshEditors then

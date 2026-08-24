@@ -1,5 +1,8 @@
 local ADDON_NAME, addon = ...
 
+local getAddOnMetadata = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
+addon.VERSION = getAddOnMetadata and getAddOnMetadata(ADDON_NAME, "Version") or "Unknown"
+
 -- SLASH COMMANDS
 local function HandleSlashCommand(message)
     local command = string.lower(strtrim(message or ""))

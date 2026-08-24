@@ -5,26 +5,15 @@ addon.Commands = {}
 local emoteAliases = addon.EmoteAliases
 
 -- COMMAND EXECUTION
-local function GetUnitDisplayName(unit, includeRealm)
-    local name, realm = UnitName(unit)
-
-    if not name then
-        return ""
-    end
-
-    if includeRealm and realm and realm ~= "" then
-        return name .. "-" .. realm
-    end
-
-    return name
+local function GetUnitDisplayName(unit)
+    local name = UnitName(unit)
+    return type(name) == "string" and name or ""
 end
 
 local function ReplaceCommandTokens(command)
     local replacements = {
-        ["{target}"] = GetUnitDisplayName("target", false),
-        ["{target-full}"] = GetUnitDisplayName("target", true),
-        ["{player}"] = GetUnitDisplayName("player", false),
-        ["{player-full}"] = GetUnitDisplayName("player", true)
+        ["{target}"] = GetUnitDisplayName("target"),
+        ["{player}"] = GetUnitDisplayName("player")
     }
 
     for token, value in pairs(replacements) do

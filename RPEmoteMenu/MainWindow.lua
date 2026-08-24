@@ -495,7 +495,7 @@ function MainWindow.CreateMainWindow()
 
     local title = MainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 10, -10)
-    title:SetText("RP Emote Menu 1.6")
+    title:SetText("RP Emote Menu " .. addon.VERSION)
     title:SetTextColor(1, 1, 1, 1)
 
     local function CreateCategoryTab()

@@ -15,10 +15,8 @@ local _, addon = ...
 --      "/e watches {target} quietly."}
 --
 -- Tokens supported in either command:
---     {target}       Target's name without the realm.
---     {target-full}  Target's name including the realm when applicable.
---     {player}       Your character's name without the realm.
---     {player-full}  Your character's name including the realm when applicable.
+--     {target}  Target's name without the realm.
+--     {player}  Your character's name without the realm.
 --
 -- Blizzard also supports %t in many chat commands as the current target's name,
 -- but the {target} tokens above are expanded by this addon before the command
