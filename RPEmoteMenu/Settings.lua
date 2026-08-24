@@ -297,15 +297,30 @@ local function GetExchangeDialog()
             return
         end
 
-        local success, result = Serialization.ImportCategory(
-            dialog.categoryIndex,
-            editBox:GetText()
-        )
+        local success
+        local result
+
+        if dialog.dataType == "profile" then
+            success, result = Serialization.ImportProfile(editBox:GetText())
+        else
+            success, result = Serialization.ImportCategory(
+                dialog.categoryIndex,
+                editBox:GetText()
+            )
+        end
 
         if success then
             editBox:SetText("")
             dialog:UpdateActionState()
-            SetStatus("Imported category " .. result .. ".")
+
+            if dialog.dataType == "profile" then
+                SetStatus(
+                    "Imported profile " .. result .. " into "
+                    .. Database.GetActiveProfileName() .. "."
+                )
+            else
+                SetStatus("Imported category " .. result .. ".")
+            end
         else
             SetStatus(result, true)
             dialog:UpdateActionState()
@@ -323,6 +338,7 @@ local function GetExchangeDialog()
         end
 
         self.mode = "export"
+        self.dataType = "category"
         self.categoryIndex = categoryIndex
         title:SetText("Export Category " .. categoryIndex)
         instructions:SetText("Copy this JSON to share or save the category and its emotes.")
@@ -344,10 +360,57 @@ local function GetExchangeDialog()
         end
 
         self.mode = "import"
+        self.dataType = "category"
         self.categoryIndex = categoryIndex
         title:SetText("Import Category " .. categoryIndex)
         instructions:SetText("Paste exported category JSON below. Importing replaces this category.")
         actionButton:SetText("Import")
+        SetStatus("")
+        editBox:SetText("")
+        scrollFrame:SetVerticalScroll(0)
+        self:UpdateActionState()
+        self:Show()
+        editBox:SetFocus()
+        return true
+    end
+
+    function dialog:OpenProfileExport()
+        local exported, errorMessage = Serialization.ExportProfile()
+        if not exported then
+            return false, errorMessage
+        end
+
+        self.mode = "export"
+        self.dataType = "profile"
+        self.categoryIndex = nil
+        title:SetText("Export Profile: " .. Database.GetActiveProfileName())
+        instructions:SetText("Copy this JSON to share or save every category and emote in this profile.")
+        actionButton:SetText("Select All")
+        SetStatus("")
+        editBox:SetText(exported)
+        editBox:SetCursorPosition(0)
+        scrollFrame:SetVerticalScroll(0)
+        self:UpdateActionState()
+        self:Show()
+        editBox:SetFocus()
+        editBox:HighlightText()
+        return true
+    end
+
+    function dialog:OpenProfileImport()
+        if not Database.CanEditActiveProfile() then
+            return false, "The Default profile cannot receive imports."
+        end
+
+        self.mode = "import"
+        self.dataType = "profile"
+        self.categoryIndex = nil
+        title:SetText("Import Profile: " .. Database.GetActiveProfileName())
+        instructions:SetText(
+            "Paste exported profile JSON below. Importing replaces every category "
+            .. "and emote in the current profile."
+        )
+        actionButton:SetText("Import Profile")
         SetStatus("")
         editBox:SetText("")
         scrollFrame:SetVerticalScroll(0)
@@ -641,6 +704,8 @@ local function CreateProfilesSettingsPanel()
     local copyButton
     local renameButton
     local deleteButton
+    local exportProfileButton
+    local importProfileButton
 
     local function UpdateButtonState()
         local hasName = strtrim(nameInput:GetText() or "") ~= ""
@@ -650,6 +715,7 @@ local function CreateProfilesSettingsPanel()
         copyButton:SetEnabled(hasName)
         renameButton:SetEnabled(hasName and editable)
         deleteButton:SetEnabled(editable)
+        importProfileButton:SetEnabled(editable)
     end
 
     local function SetStatus(message, isError)
@@ -751,6 +817,23 @@ local function CreateProfilesSettingsPanel()
         else
             SetStatus(errorMessage, true)
         end
+    end)
+
+    exportProfileButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    exportProfileButton:SetSize(125, 24)
+    exportProfileButton:SetPoint("LEFT", selector, "RIGHT", 8, 0)
+    exportProfileButton:SetText("Export Profile")
+    exportProfileButton:SetScript("OnClick", function()
+        GetExchangeDialog():OpenProfileExport()
+    end)
+
+    importProfileButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    importProfileButton:SetSize(125, 24)
+    importProfileButton:SetPoint("LEFT", exportProfileButton, "RIGHT", 8, 0)
+    importProfileButton:SetText("Import Profile")
+    importProfileButton:SetEnabled(Database.CanEditActiveProfile())
+    importProfileButton:SetScript("OnClick", function()
+        GetExchangeDialog():OpenProfileImport()
     end)
 
     nameInput:SetScript("OnTextChanged", function(_, userInput)
