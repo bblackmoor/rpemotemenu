@@ -19,8 +19,14 @@ local minimumWidth = 250
 local minimumHeight = 150
 local maximumWidth = 400
 local maximumHeight = 400
+local sidebarWidth = 112
+local categoryButtonHeight = 24
 
 local MainFrame
+local CategorySidebar
+local CategoryScrollFrame
+local CategoryScrollChild
+local CategoryEmptyLabel
 local ScrollFrame
 local ScrollChild
 local ScrollTopIndicator
@@ -28,9 +34,7 @@ local ScrollBottomIndicator
 local CollapseBtn
 local SettingsBtn
 local ResizeGrip
-local PreviousCategoryTab
-local CurrentCategoryTab
-local NextCategoryTab
+local categoryButtons = {}
 local buttonsPool = {}
 local isWindowCollapsed = false
 
@@ -214,11 +218,13 @@ local function GetContainerButton()
     end
 
     local button = CreateFrame("Button", nil, ScrollChild)
-    button:SetSize(210, 20)
+    button:SetSize(math.max(ScrollChild:GetWidth() - 5, 1), 20)
 
     button.Text = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    button.Text:SetPoint("LEFT", button, "LEFT", 14, 0)
+    button.Text:SetPoint("LEFT", button, "LEFT", 7, 0)
+    button.Text:SetPoint("RIGHT", button, "RIGHT", -4, 0)
     button.Text:SetJustifyH("LEFT")
+    button.Text:SetWordWrap(false)
 
     table.insert(buttonsPool, button)
     return button
@@ -231,19 +237,6 @@ end
 local function IsCategoryVisible(categoryIndex)
     local category = GetCurrentCategory(categoryIndex)
     return category and Trim(category.name) ~= ""
-end
-
-local function FindVisibleCategory(startIndex, direction)
-    for step = 1, MAX_CATEGORIES do
-        local categoryIndex =
-            ((startIndex - 1 + (direction * step)) % MAX_CATEGORIES) + 1
-
-        if IsCategoryVisible(categoryIndex) then
-            return categoryIndex
-        end
-    end
-
-    return nil
 end
 
 local function FindFirstVisibleCategory()
@@ -278,6 +271,60 @@ local function GetVisibleEmotes(category)
     end
 
     return visibleEmotes
+end
+
+local function UpdateCategorySidebar()
+    if not CategoryScrollChild then
+        return
+    end
+
+    local visibleCount = 0
+
+    for categoryIndex = 1, MAX_CATEGORIES do
+        local button = categoryButtons[categoryIndex]
+        local category = GetCurrentCategory(categoryIndex)
+
+        if button and IsCategoryVisible(categoryIndex) then
+            button:ClearAllPoints()
+            button:SetPoint(
+                "TOPLEFT",
+                CategoryScrollChild,
+                "TOPLEFT",
+                0,
+                -visibleCount * categoryButtonHeight
+            )
+            button.Text:SetText(category.name)
+
+            if categoryIndex == selectedCategoryIndex then
+                button.Selection:Show()
+                button.Text:SetTextColor(1.0, 0.82, 0.0, 1)
+            else
+                button.Selection:Hide()
+                button.Text:SetTextColor(0.8, 0.8, 0.8, 1)
+            end
+
+            button:Show()
+            visibleCount = visibleCount + 1
+        elseif button then
+            button:Hide()
+        end
+    end
+
+    CategoryScrollChild:SetHeight(math.max(visibleCount * categoryButtonHeight, 1))
+
+    if visibleCount == 0 then
+        CategoryEmptyLabel:Show()
+    else
+        CategoryEmptyLabel:Hide()
+    end
+
+    local maximumScroll = math.max(
+        CategoryScrollChild:GetHeight() - CategoryScrollFrame:GetHeight(),
+        0
+    )
+    CategoryScrollFrame:SetVerticalScroll(
+        math.min(CategoryScrollFrame:GetVerticalScroll() or 0, maximumScroll)
+    )
 end
 
 local function UpdateScrollIndicators()
@@ -331,54 +378,17 @@ function MainWindow.UpdateMenu()
         selectedCategoryIndex = FindFirstVisibleCategory()
     end
 
+    settings.selectedCategory = selectedCategoryIndex or defaults.selectedCategory
+    UpdateCategorySidebar()
+
     if not selectedCategoryIndex then
-        if PreviousCategoryTab then
-            PreviousCategoryTab:Hide()
-        end
-
-        if CurrentCategoryTab then
-            CurrentCategoryTab.Text:SetText("No Categories")
-            CurrentCategoryTab:Show()
-        end
-
-        if NextCategoryTab then
-            NextCategoryTab:Hide()
-        end
-
         ScrollChild:SetHeight(1)
         ScrollFrame:SetVerticalScroll(0)
         UpdateScrollIndicators()
         return
     end
 
-    local previousIndex = FindVisibleCategory(selectedCategoryIndex, -1)
-    local nextIndex = FindVisibleCategory(selectedCategoryIndex, 1)
     local category = GetCurrentCategory(selectedCategoryIndex)
-
-    if PreviousCategoryTab then
-        if previousIndex and previousIndex ~= selectedCategoryIndex then
-            PreviousCategoryTab.Text:SetText(GetCurrentCategory(previousIndex).name)
-            PreviousCategoryTab.categoryIndex = previousIndex
-            PreviousCategoryTab:Show()
-        else
-            PreviousCategoryTab:Hide()
-        end
-    end
-
-    if CurrentCategoryTab then
-        CurrentCategoryTab.Text:SetText(category.name)
-        CurrentCategoryTab:Show()
-    end
-
-    if NextCategoryTab then
-        if nextIndex and nextIndex ~= selectedCategoryIndex then
-            NextCategoryTab.Text:SetText(GetCurrentCategory(nextIndex).name)
-            NextCategoryTab.categoryIndex = nextIndex
-            NextCategoryTab:Show()
-        else
-            NextCategoryTab:Hide()
-        end
-    end
 
     local visibleEmotes = GetVisibleEmotes(category)
     local dynamicY = 0
@@ -424,19 +434,15 @@ local function UpdateWindowCollapse()
     AnchorFrameByTopLeft()
 
     if isWindowCollapsed then
+        CategorySidebar:Hide()
         ScrollFrame:Hide()
         ScrollTopIndicator:Hide()
         ScrollBottomIndicator:Hide()
-        PreviousCategoryTab:Hide()
-        CurrentCategoryTab:Hide()
-        NextCategoryTab:Hide()
         MainFrame:SetHeight(collapsedHeight)
         CollapseBtn:SetText("+")
     else
         MainFrame:SetSize(settings.width, settings.height)
-        PreviousCategoryTab:Show()
-        CurrentCategoryTab:Show()
-        NextCategoryTab:Show()
+        CategorySidebar:Show()
         ScrollFrame:Show()
         CollapseBtn:SetText("-")
         MainWindow.UpdateMenu()
@@ -453,6 +459,7 @@ end
 -- MAIN WINDOW
 function MainWindow.CreateMainWindow()
     settings = Database.GetSettings()
+    selectedCategoryIndex = settings.selectedCategory
     MainFrame = CreateFrame("Frame", "RPEmoteMenu", UIParent, "BackdropTemplate")
     MainFrame:SetSize(defaults.width, defaults.height)
     MainFrame:SetResizeBounds(minimumWidth, minimumHeight, maximumWidth, maximumHeight)
@@ -472,12 +479,14 @@ function MainWindow.CreateMainWindow()
     end)
 
     MainFrame:SetScript("OnSizeChanged", function(self, width)
+        local contentWidth = math.max(width - sidebarWidth - 35, 1)
+
         if ScrollChild then
-            ScrollChild:SetWidth(math.max(width - 30, 1))
+            ScrollChild:SetWidth(contentWidth)
         end
 
         for _, button in ipairs(buttonsPool) do
-            button:SetWidth(math.max(width - 40, 1))
+            button:SetWidth(math.max(contentWidth - 5, 1))
         end
 
         if ScrollFrame then
@@ -498,50 +507,96 @@ function MainWindow.CreateMainWindow()
     title:SetText("RP Emote Menu " .. addon.VERSION)
     title:SetTextColor(1, 1, 1, 1)
 
-    local function CreateCategoryTab()
-        local tab = CreateFrame("Button", nil, MainFrame)
-        tab:SetHeight(24)
+    CategorySidebar = CreateFrame("Frame", nil, MainFrame, "BackdropTemplate")
+    CategorySidebar:SetWidth(sidebarWidth)
+    CategorySidebar:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 5, -36)
+    CategorySidebar:SetPoint("BOTTOMLEFT", MainFrame, "BOTTOMLEFT", 5, 10)
+    CategorySidebar:SetBackdrop({
+        bgFile = "Interface\\ChatFrame\\ChatFrameBackground"
+    })
+    CategorySidebar:SetBackdropColor(0.08, 0.08, 0.08, 0.95)
 
-        tab.Text = tab:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        tab.Text:SetPoint("CENTER")
-        tab.Text:SetJustifyH("CENTER")
+    local sidebarDivider = CategorySidebar:CreateTexture(nil, "OVERLAY")
+    sidebarDivider:SetWidth(1)
+    sidebarDivider:SetPoint("TOPRIGHT", CategorySidebar, "TOPRIGHT", 0, 0)
+    sidebarDivider:SetPoint("BOTTOMRIGHT", CategorySidebar, "BOTTOMRIGHT", 0, 0)
+    sidebarDivider:SetColorTexture(0.3, 0.3, 0.3, 0.9)
 
-        return tab
+    CategoryScrollFrame = CreateFrame("ScrollFrame", nil, CategorySidebar)
+    CategoryScrollFrame:SetPoint("TOPLEFT", CategorySidebar, "TOPLEFT", 3, -3)
+    CategoryScrollFrame:SetPoint("BOTTOMRIGHT", CategorySidebar, "BOTTOMRIGHT", -4, 3)
+    CategoryScrollFrame:EnableMouseWheel(true)
+
+    CategoryScrollChild = CreateFrame("Frame", nil, CategoryScrollFrame)
+    CategoryScrollChild:SetSize(sidebarWidth - 7, 1)
+    CategoryScrollFrame:SetScrollChild(CategoryScrollChild)
+    CategoryScrollFrame:SetScript("OnMouseWheel", function(self, direction)
+        local maximumScroll = math.max(
+            CategoryScrollChild:GetHeight() - self:GetHeight(),
+            0
+        )
+        local scroll = (self:GetVerticalScroll() or 0)
+            - (direction * categoryButtonHeight)
+
+        self:SetVerticalScroll(math.max(0, math.min(maximumScroll, scroll)))
+    end)
+
+    CategoryEmptyLabel = CategorySidebar:CreateFontString(
+        nil,
+        "OVERLAY",
+        "GameFontDisableSmall"
+    )
+    CategoryEmptyLabel:SetPoint("TOPLEFT", CategorySidebar, "TOPLEFT", 7, -9)
+    CategoryEmptyLabel:SetPoint("TOPRIGHT", CategorySidebar, "TOPRIGHT", -7, -9)
+    CategoryEmptyLabel:SetJustifyH("LEFT")
+    CategoryEmptyLabel:SetText("No categories")
+    CategoryEmptyLabel:Hide()
+
+    for categoryIndex = 1, MAX_CATEGORIES do
+        local button = CreateFrame("Button", nil, CategoryScrollChild)
+        button:SetSize(sidebarWidth - 7, categoryButtonHeight)
+        button.categoryIndex = categoryIndex
+
+        button.Selection = button:CreateTexture(nil, "BACKGROUND")
+        button.Selection:SetAllPoints(button)
+        button.Selection:SetColorTexture(0.3, 0.25, 0.12, 0.85)
+        button.Selection:Hide()
+
+        button.Text = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        button.Text:SetPoint("LEFT", button, "LEFT", 6, 0)
+        button.Text:SetPoint("RIGHT", button, "RIGHT", -5, 0)
+        button.Text:SetJustifyH("LEFT")
+        button.Text:SetWordWrap(false)
+
+        button:SetHighlightTexture(
+            "Interface\\QuestFrame\\UI-QuestTitleHighlight",
+            "ADD"
+        )
+        button:SetScript("OnClick", function(self)
+            MainWindow.SetSelectedCategory(self.categoryIndex)
+            MainWindow.UpdateMenu()
+        end)
+        button:SetScript("OnEnter", function(self)
+            if self.Text:IsTruncated() then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetText(self.Text:GetText())
+                GameTooltip:Show()
+            end
+        end)
+        button:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+        button:Hide()
+
+        categoryButtons[categoryIndex] = button
     end
 
-    PreviousCategoryTab = CreateCategoryTab()
-    PreviousCategoryTab:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 8, -32)
-    PreviousCategoryTab:SetPoint("TOPRIGHT", MainFrame, "TOP", -50, -32)
-    PreviousCategoryTab.Text:SetTextColor(0.55, 0.55, 0.55)
-    PreviousCategoryTab:SetScript("OnClick", function(self)
-        if self.categoryIndex then
-            selectedCategoryIndex = self.categoryIndex
-            MainWindow.UpdateMenu()
-        end
-    end)
-
-    CurrentCategoryTab = CreateCategoryTab()
-    CurrentCategoryTab:SetPoint("TOPLEFT", MainFrame, "TOP", -42, -32)
-    CurrentCategoryTab:SetPoint("TOPRIGHT", MainFrame, "TOP", 42, -32)
-    CurrentCategoryTab.Text:SetTextColor(1.0, 0.82, 0.0)
-
-    NextCategoryTab = CreateCategoryTab()
-    NextCategoryTab:SetPoint("TOPLEFT", MainFrame, "TOP", 50, -32)
-    NextCategoryTab:SetPoint("TOPRIGHT", MainFrame, "TOPRIGHT", -8, -32)
-    NextCategoryTab.Text:SetTextColor(0.55, 0.55, 0.55)
-    NextCategoryTab:SetScript("OnClick", function(self)
-        if self.categoryIndex then
-            selectedCategoryIndex = self.categoryIndex
-            MainWindow.UpdateMenu()
-        end
-    end)
-
     ScrollFrame = CreateFrame("ScrollFrame", nil, MainFrame, "UIPanelScrollFrameTemplate")
-    ScrollFrame:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 5, -62)
+    ScrollFrame:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", sidebarWidth + 10, -40)
     ScrollFrame:SetPoint("BOTTOMRIGHT", MainFrame, "BOTTOMRIGHT", -25, 10)
 
     ScrollChild = CreateFrame("Frame", nil, ScrollFrame)
-    ScrollChild:SetSize(defaults.width - 30, 1)
+    ScrollChild:SetSize(math.max(defaults.width - sidebarWidth - 35, 1), 1)
     ScrollFrame:SetScrollChild(ScrollChild)
 
     ScrollTopIndicator = MainFrame:CreateTexture(nil, "OVERLAY")
@@ -637,7 +692,18 @@ function MainWindow.CreateMainWindow()
 end
 
 function MainWindow.SetSelectedCategory(categoryIndex)
+    if type(categoryIndex) ~= "number"
+        or categoryIndex % 1 ~= 0
+        or categoryIndex < 1
+        or categoryIndex > MAX_CATEGORIES then
+        return
+    end
+
     selectedCategoryIndex = categoryIndex
+
+    if settings then
+        settings.selectedCategory = categoryIndex
+    end
 end
 
 function MainWindow.IsCollapsed()

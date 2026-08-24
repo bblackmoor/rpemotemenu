@@ -403,6 +403,12 @@ function Database.InitializeDatabase()
         RPEmoteMenuDB.relativePoint = defaults.relativePoint
     end
 
+    if RPEmoteMenuDB.selectedCategory % 1 ~= 0
+        or RPEmoteMenuDB.selectedCategory < 1
+        or RPEmoteMenuDB.selectedCategory > MAX_CATEGORIES then
+        RPEmoteMenuDB.selectedCategory = defaults.selectedCategory
+    end
+
     -- Legacy pre-profile categories are intentionally discarded. Existing valid
     -- named profiles remain available, and Default is rebuilt every login so it
     -- always reflects the categories currently supplied by the addon.

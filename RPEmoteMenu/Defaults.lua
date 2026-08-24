@@ -146,6 +146,7 @@ addon.DefaultSettings = {
     showAtLogin = true,
     rememberMinimized = true,
     minimized = false,
+    selectedCategory = 1,
     point = "CENTER",
     relativePoint = "CENTER",
     x = 0,
