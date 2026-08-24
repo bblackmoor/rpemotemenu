@@ -9,6 +9,7 @@ local Serialization = addon.Serialization
 local settings
 local MAX_CATEGORIES = addon.MAX_CATEGORIES
 local MAX_EMOTES = addon.MAX_EMOTES
+local SOURCE_URL = "https://github.com/bblackmoor/rpemotemenu"
 local settingsCategory
 local generalSettingsCategory
 local appearanceSettingsCategory
@@ -456,6 +457,31 @@ end
 local function CreateAboutPanel()
     local panel = CreateFrame("Frame")
 
+    StaticPopupDialogs["RPEMOTEMENU_COPY_SOURCE"] = {
+        text = "Press Ctrl+C to copy the source URL.",
+        button1 = CLOSE or "Close",
+        hasEditBox = true,
+        maxLetters = 255,
+        editBoxWidth = 340,
+        OnShow = function(self, url)
+            local editBox = self.GetEditBox and self:GetEditBox() or self.editBox
+
+            editBox:SetText(url or self.data or SOURCE_URL)
+            editBox:SetFocus()
+            editBox:HighlightText()
+        end,
+        EditBoxOnEnterPressed = function(self)
+            self:GetParent():Hide()
+        end,
+        EditBoxOnEscapePressed = function(self)
+            self:GetParent():Hide()
+        end,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+        preferredIndex = 3
+    }
+
     local heading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     heading:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -16)
     heading:SetText("RP Emote Menu — About")
@@ -477,7 +503,37 @@ local function CreateAboutPanel()
     details:SetText(
         "Version " .. addon.VERSION .. "\n" ..
         "Author    Brandon Blackmoor\n" ..
-        "Category  Roleplay\n" ..
+        "Category  Roleplay"
+    )
+
+    local sourceLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    sourceLabel:SetPoint("TOPLEFT", details, "BOTTOMLEFT", 0, -2)
+    sourceLabel:SetText("Source    ")
+
+    local sourceLink = CreateFrame("Button", nil, panel)
+    sourceLink:SetPoint("LEFT", sourceLabel, "RIGHT", 0, 0)
+
+    local sourceText = sourceLink:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    sourceText:SetPoint("LEFT", sourceLink, "LEFT")
+    sourceText:SetText(SOURCE_URL)
+    sourceText:SetTextColor(0.35, 0.7, 1, 1)
+
+    sourceLink:SetSize(sourceText:GetStringWidth(), 16)
+    sourceLink:SetScript("OnEnter", function()
+        sourceText:SetTextColor(0.65, 0.85, 1, 1)
+    end)
+    sourceLink:SetScript("OnLeave", function()
+        sourceText:SetTextColor(0.35, 0.7, 1, 1)
+    end)
+    sourceLink:SetScript("OnClick", function()
+        StaticPopup_Show("RPEMOTEMENU_COPY_SOURCE", nil, nil, SOURCE_URL)
+    end)
+
+    local information = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    information:SetPoint("TOPLEFT", sourceLabel, "BOTTOMLEFT", 0, -14)
+    information:SetWidth(620)
+    information:SetJustifyH("LEFT")
+    information:SetText(
         "License   GPL-3.0\n\n" ..
 
         "Slash commands\n" ..
