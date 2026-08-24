@@ -5,6 +5,7 @@ addon.Settings = {}
 local AddonSettings = addon.Settings
 local MainWindow = addon.MainWindow
 local Database = addon.Database
+local Serialization = addon.Serialization
 local settings
 local MAX_CATEGORIES = addon.MAX_CATEGORIES
 local MAX_EMOTES = addon.MAX_EMOTES
@@ -13,6 +14,7 @@ local generalSettingsCategory
 local profilesSettingsCategory
 local categorySettingsCategories = {}
 local resetAllCategoriesButton
+local exchangeDialog
 
 -- SETTINGS PANEL
 local function CreateCheckbox(parent, label, y, getValue, setValue)
@@ -148,6 +150,207 @@ local function CreateLabeledEditBox(
 
     editBox:RefreshFromDatabase()
     return editBox
+end
+
+local function GetExchangeDialog()
+    if exchangeDialog then
+        return exchangeDialog
+    end
+
+    local dialog = CreateFrame(
+        "Frame",
+        "RPEmoteMenuExchangeDialog",
+        UIParent,
+        "BackdropTemplate"
+    )
+    dialog:SetSize(620, 470)
+    dialog:SetPoint("CENTER", UIParent, "CENTER")
+    dialog:SetFrameStrata("DIALOG")
+    dialog:SetClampedToScreen(true)
+    dialog:SetMovable(true)
+    dialog:EnableMouse(true)
+    dialog:RegisterForDrag("LeftButton")
+    dialog:SetScript("OnDragStart", dialog.StartMoving)
+    dialog:SetScript("OnDragStop", dialog.StopMovingOrSizing)
+    dialog:SetBackdrop({
+        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1
+    })
+    dialog:SetBackdropColor(0.08, 0.08, 0.08, 0.98)
+    dialog:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+    dialog:Hide()
+
+    if UISpecialFrames then
+        table.insert(UISpecialFrames, "RPEmoteMenuExchangeDialog")
+    end
+
+    local title = dialog:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOPLEFT", dialog, "TOPLEFT", 18, -16)
+    dialog.title = title
+
+    local closeIcon = CreateFrame("Button", nil, dialog, "UIPanelCloseButton")
+    closeIcon:SetPoint("TOPRIGHT", dialog, "TOPRIGHT", -4, -4)
+    closeIcon:SetScript("OnClick", function()
+        dialog:Hide()
+    end)
+
+    local instructions = dialog:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    instructions:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -10)
+    instructions:SetWidth(570)
+    instructions:SetJustifyH("LEFT")
+    instructions:SetTextColor(0.8, 0.8, 0.8)
+    dialog.instructions = instructions
+
+    local textBackground = CreateFrame("Frame", nil, dialog, "BackdropTemplate")
+    textBackground:SetPoint("TOPLEFT", dialog, "TOPLEFT", 18, -80)
+    textBackground:SetPoint("BOTTOMRIGHT", dialog, "BOTTOMRIGHT", -42, 80)
+    textBackground:SetBackdrop({
+        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1
+    })
+    textBackground:SetBackdropColor(0.04, 0.04, 0.04, 1)
+    textBackground:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+
+    local scrollFrame = CreateFrame("ScrollFrame", nil, textBackground, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", textBackground, "TOPLEFT", 5, -5)
+    scrollFrame:SetPoint("BOTTOMRIGHT", textBackground, "BOTTOMRIGHT", -5, 5)
+
+    local editBox = CreateFrame("EditBox", nil, scrollFrame)
+    editBox:SetMultiLine(true)
+    editBox:SetAutoFocus(false)
+    editBox:SetFont(STANDARD_TEXT_FONT, 12, "")
+    editBox:SetTextColor(1, 1, 1, 1)
+    editBox:SetWidth(540)
+    editBox:SetHeight(300)
+    editBox:SetTextInsets(4, 4, 4, 4)
+    scrollFrame:SetScrollChild(editBox)
+    dialog.editBox = editBox
+
+    local status = dialog:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    status:SetPoint("BOTTOMLEFT", dialog, "BOTTOMLEFT", 18, 49)
+    status:SetWidth(570)
+    status:SetJustifyH("LEFT")
+    dialog.status = status
+
+    local actionButton = CreateFrame("Button", nil, dialog, "UIPanelButtonTemplate")
+    actionButton:SetSize(120, 24)
+    actionButton:SetPoint("BOTTOMRIGHT", dialog, "BOTTOMRIGHT", -144, 14)
+    dialog.actionButton = actionButton
+
+    local closeButton = CreateFrame("Button", nil, dialog, "UIPanelButtonTemplate")
+    closeButton:SetSize(110, 24)
+    closeButton:SetPoint("BOTTOMRIGHT", dialog, "BOTTOMRIGHT", -18, 14)
+    closeButton:SetText("Close")
+    closeButton:SetScript("OnClick", function()
+        dialog:Hide()
+    end)
+
+    local function SetStatus(message, isError)
+        status:SetText(message or "")
+
+        if isError then
+            status:SetTextColor(1, 0.35, 0.35, 1)
+        else
+            status:SetTextColor(0.35, 1, 0.45, 1)
+        end
+    end
+
+    function dialog:UpdateActionState()
+        if self.mode == "import" then
+            local hasText = strtrim(editBox:GetText() or "") ~= ""
+            actionButton:SetEnabled(Database.CanEditActiveProfile() and hasText)
+        else
+            actionButton:SetEnabled(true)
+        end
+    end
+
+    editBox:SetScript("OnTextChanged", function(self, userInput)
+        self:SetHeight(math.max(scrollFrame:GetHeight() or 0, (self:GetStringHeight() or 0) + 12))
+
+        if userInput then
+            SetStatus("")
+        end
+
+        dialog:UpdateActionState()
+    end)
+
+    editBox:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
+        dialog:Hide()
+    end)
+
+    actionButton:SetScript("OnClick", function()
+        if dialog.mode == "export" then
+            editBox:SetFocus()
+            editBox:HighlightText()
+            SetStatus("Press Ctrl+C to copy the selected text.")
+            return
+        end
+
+        local success, result = Serialization.ImportCategory(
+            dialog.categoryIndex,
+            editBox:GetText()
+        )
+
+        if success then
+            editBox:SetText("")
+            dialog:UpdateActionState()
+            SetStatus("Imported category " .. result .. ".")
+        else
+            SetStatus(result, true)
+            dialog:UpdateActionState()
+        end
+    end)
+
+    dialog:SetScript("OnHide", function()
+        editBox:ClearFocus()
+    end)
+
+    function dialog:OpenExport(categoryIndex)
+        local exported, errorMessage = Serialization.ExportCategory(categoryIndex)
+        if not exported then
+            return false, errorMessage
+        end
+
+        self.mode = "export"
+        self.categoryIndex = categoryIndex
+        title:SetText("Export Category " .. categoryIndex)
+        instructions:SetText("Copy this JSON to share or save the category and its emotes.")
+        actionButton:SetText("Select All")
+        SetStatus("")
+        editBox:SetText(exported)
+        editBox:SetCursorPosition(0)
+        scrollFrame:SetVerticalScroll(0)
+        self:UpdateActionState()
+        self:Show()
+        editBox:SetFocus()
+        editBox:HighlightText()
+        return true
+    end
+
+    function dialog:OpenImport(categoryIndex)
+        if not Database.CanEditActiveProfile() then
+            return false, "The Default profile cannot receive imports."
+        end
+
+        self.mode = "import"
+        self.categoryIndex = categoryIndex
+        title:SetText("Import Category " .. categoryIndex)
+        instructions:SetText("Paste exported category JSON below. Importing replaces this category.")
+        actionButton:SetText("Import")
+        SetStatus("")
+        editBox:SetText("")
+        scrollFrame:SetVerticalScroll(0)
+        self:UpdateActionState()
+        self:Show()
+        editBox:SetFocus()
+        return true
+    end
+
+    exchangeDialog = dialog
+    return dialog
 end
 
 local function CreateAboutPanel()
@@ -585,11 +788,28 @@ local function CreateCategorySettingsPanel(categoryIndex)
 
     local resetButton = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
     resetButton:SetSize(190, 24)
-    resetButton:SetPoint("TOPRIGHT", content, "TOPRIGHT", -90, -12)
+    resetButton:SetPoint("TOPRIGHT", content, "TOPRIGHT", -26, -12)
     resetButton:SetText("Reset Category to Defaults")
     resetButton:SetEnabled(Database.CanEditActiveProfile())
     resetButton:SetScript("OnClick", function()
         Database.ResetCategoryToDefaults(categoryIndex)
+    end)
+
+    local importButton = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+    importButton:SetSize(90, 24)
+    importButton:SetPoint("RIGHT", resetButton, "LEFT", -8, 0)
+    importButton:SetText("Import")
+    importButton:SetEnabled(Database.CanEditActiveProfile())
+    importButton:SetScript("OnClick", function()
+        GetExchangeDialog():OpenImport(categoryIndex)
+    end)
+
+    local exportButton = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+    exportButton:SetSize(90, 24)
+    exportButton:SetPoint("RIGHT", importButton, "LEFT", -8, 0)
+    exportButton:SetText("Export")
+    exportButton:SetScript("OnClick", function()
+        GetExchangeDialog():OpenExport(categoryIndex)
     end)
 
     local placeholderText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -669,7 +889,9 @@ local function CreateCategorySettingsPanel(categoryIndex)
     content:SetHeight(-y + 20)
 
     panel.RefreshEditors = function()
-        resetButton:SetEnabled(Database.CanEditActiveProfile())
+        local editable = Database.CanEditActiveProfile()
+        resetButton:SetEnabled(editable)
+        importButton:SetEnabled(editable)
 
         for _, editBox in ipairs(editors) do
             editBox:RefreshFromDatabase()
@@ -720,6 +942,10 @@ function AddonSettings.CreateSettingsPanel()
     AddonSettings.RefreshEditors = function(categoryIndex)
         if resetAllCategoriesButton then
             resetAllCategoriesButton:SetEnabled(Database.CanEditActiveProfile())
+        end
+
+        if exchangeDialog and exchangeDialog:IsShown() then
+            exchangeDialog:UpdateActionState()
         end
 
         if categoryIndex then
