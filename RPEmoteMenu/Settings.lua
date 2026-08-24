@@ -465,10 +465,9 @@ local function CreateAboutPanel()
     description:SetWidth(620)
     description:SetJustifyH("LEFT")
     description:SetText(
-        "A configurable roleplaying emote menu with a category sidebar, " ..
-        "character-selected profiles, JSON import/export, and customizable " ..
-        "appearance. Organize up to ten categories with ten emotes each, " ..
-        "including optional targeted commands."
+        "A customizable roleplaying emote menu with profiles, targeted " ..
+        "commands, category and profile sharing, and adjustable fonts, " ..
+        "colors, opacity, and inactivity fading."
     )
 
     local details = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -481,34 +480,13 @@ local function CreateAboutPanel()
         "Category  Roleplay\n" ..
         "License   GPL-3.0\n\n" ..
 
-        "Categories and emotes\n" ..
-        "    Choose a named category from the left sidebar.\n" ..
-        "    Edit all ten categories from the Categories settings page.\n" ..
-        "    Each category supports up to ten emotes.\n" ..
-        "    A targeted command is used only for another target.\n\n" ..
-
-        "Profiles\n" ..
-        "    Each character chooses its own active profile.\n" ..
-        "    Profiles can be created, copied, renamed, or deleted.\n" ..
-        "    The Default profile is always read-only.\n\n" ..
-
-        "Import and export\n" ..
-        "    Share individual categories or complete profiles as JSON.\n" ..
-        "    Category import replaces the selected category.\n" ..
-        "    Profile import always creates a new named profile.\n\n" ..
-
-        "Fonts and colors\n" ..
-        "    Customize category and emote-label fonts and colors.\n" ..
-        "    Choose the background, border style, and window opacity.\n" ..
-        "    Optionally fade the menu smoothly after inactivity.\n\n" ..
-
-        "Slash Commands\n" ..
+        "Slash commands\n" ..
         "    /rpem - Show or hide the RP Emote Menu.\n" ..
         "    /rpem config - Open the addon settings.\n" ..
         "    /rpem options - Open the addon settings.\n" ..
         "    /rpem settings - Open the addon settings.\n\n" ..
 
-        "Tokens supported by /e commands\n" ..
+        "Character-name tokens\n" ..
         "    {target}  Target's name without the realm.\n" ..
         "    {player}  Your character's name without the realm."
     )
