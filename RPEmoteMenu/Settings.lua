@@ -13,7 +13,7 @@ local settingsCategory
 local generalSettingsCategory
 local appearanceSettingsCategory
 local profilesSettingsCategory
-local categorySettingsCategories = {}
+local categoriesSettingsCategory
 local resetAllCategoriesButton
 local exchangeDialog
 
@@ -128,6 +128,12 @@ local function CreateLabeledEditBox(
     local function Commit(self)
         if SetCurrentValue(self, self:GetText() or "") then
             MainWindow.UpdateMenu()
+
+            if not self.emoteIndex
+                and self.fieldName == "name"
+                and AddonSettings.RefreshCategorySelector then
+                AddonSettings.RefreshCategorySelector()
+            end
         else
             DisplayCurrentValue(self)
         end
@@ -477,6 +483,7 @@ local function CreateAboutPanel()
 
         "Categories and emotes\n" ..
         "    Choose a named category from the left sidebar.\n" ..
+        "    Edit all ten categories from the Categories settings page.\n" ..
         "    Each category supports up to ten emotes.\n" ..
         "    A targeted command is used only for another target.\n\n" ..
 
@@ -493,7 +500,7 @@ local function CreateAboutPanel()
         "Fonts and colors\n" ..
         "    Customize category and emote-label fonts and colors.\n" ..
         "    Choose the background, border style, and window opacity.\n" ..
-        "    Optionally fade the menu after a period of inactivity.\n\n" ..
+        "    Optionally fade the menu smoothly after inactivity.\n\n" ..
 
         "Slash Commands\n" ..
         "    /rpem - Show or hide the RP Emote Menu.\n" ..
@@ -1353,8 +1360,15 @@ local function CreateProfilesSettingsPanel()
     return panel
 end
 
-local function CreateCategorySettingsPanel(categoryIndex)
+local function CreateCategoriesSettingsPanel()
     local panel = CreateFrame("Frame")
+    local selectedCategoryIndex = settings.selectedCategory
+
+    if type(selectedCategoryIndex) ~= "number"
+        or selectedCategoryIndex < 1
+        or selectedCategoryIndex > MAX_CATEGORIES then
+        selectedCategoryIndex = 1
+    end
 
     local scrollFrame = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, -4)
@@ -1366,14 +1380,37 @@ local function CreateCategorySettingsPanel(categoryIndex)
 
     local heading = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     heading:SetPoint("TOPLEFT", content, "TOPLEFT", 16, -16)
-    heading:SetText("Category " .. categoryIndex)
+    heading:SetText("Categories")
+
+    local selector = CreateFrame(
+        "DropdownButton",
+        nil,
+        content,
+        "WowStyle1DropdownTemplate"
+    )
+    selector:SetWidth(300)
+    selector:SetPoint("TOPLEFT", content, "TOPLEFT", 196, -12)
+
+    local function GetCategoryLabel(categoryIndex)
+        local category = Database.GetCategory(categoryIndex)
+        local categoryName = strtrim(category and category.name or "")
+        local label = "Category " .. categoryIndex
+
+        if categoryName ~= "" then
+            label = label .. ": " .. categoryName
+        end
+
+        return label
+    end
+
+    selector:SetDefaultText(GetCategoryLabel(selectedCategoryIndex))
 
     local resetButton = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
     resetButton:SetSize(190, 24)
     resetButton:SetText("Reset Category to Defaults")
     resetButton:SetEnabled(Database.CanEditActiveProfile())
     resetButton:SetScript("OnClick", function()
-        Database.ResetCategoryToDefaults(categoryIndex)
+        Database.ResetCategoryToDefaults(selectedCategoryIndex)
     end)
 
     local importButton = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
@@ -1381,22 +1418,22 @@ local function CreateCategorySettingsPanel(categoryIndex)
     importButton:SetText("Import")
     importButton:SetEnabled(Database.CanEditActiveProfile())
     importButton:SetScript("OnClick", function()
-        GetExchangeDialog():OpenImport(categoryIndex)
+        GetExchangeDialog():OpenImport(selectedCategoryIndex)
     end)
 
     local exportButton = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
     exportButton:SetSize(90, 24)
-    exportButton:SetPoint("TOPLEFT", content, "TOPLEFT", 196, -12)
+    exportButton:SetPoint("TOPLEFT", content, "TOPLEFT", 196, -48)
     exportButton:SetText("Export")
     exportButton:SetScript("OnClick", function()
-        GetExchangeDialog():OpenExport(categoryIndex)
+        GetExchangeDialog():OpenExport(selectedCategoryIndex)
     end)
 
     importButton:SetPoint("LEFT", exportButton, "RIGHT", 8, 0)
     resetButton:SetPoint("LEFT", importButton, "RIGHT", 8, 0)
 
     local placeholderText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    placeholderText:SetPoint("TOPLEFT", content, "TOPLEFT", 16, -50)
+    placeholderText:SetPoint("TOPLEFT", content, "TOPLEFT", 16, -86)
     placeholderText:SetWidth(630)
     placeholderText:SetJustifyH("LEFT")
     placeholderText:SetText(
@@ -1409,7 +1446,7 @@ local function CreateCategorySettingsPanel(categoryIndex)
     placeholderText:SetTextColor(0.8, 0.8, 0.8)
 
     local editors = {}
-    local y = -126
+    local y = -162
 
     local nameBox = CreateLabeledEditBox(
         content,
@@ -1417,7 +1454,7 @@ local function CreateCategorySettingsPanel(categoryIndex)
         16,
         y,
         420,
-        categoryIndex,
+        selectedCategoryIndex,
         nil,
         "name"
     )
@@ -1436,7 +1473,7 @@ local function CreateCategorySettingsPanel(categoryIndex)
             48,
             y - 20,
             390,
-            categoryIndex,
+            selectedCategoryIndex,
             emoteIndex,
             "label"
         )
@@ -1447,7 +1484,7 @@ local function CreateCategorySettingsPanel(categoryIndex)
             48,
             y - 48,
             390,
-            categoryIndex,
+            selectedCategoryIndex,
             emoteIndex,
             "defaultCommand"
         )
@@ -1458,7 +1495,7 @@ local function CreateCategorySettingsPanel(categoryIndex)
             48,
             y - 76,
             390,
-            categoryIndex,
+            selectedCategoryIndex,
             emoteIndex,
             "targetedCommand"
         )
@@ -1472,7 +1509,47 @@ local function CreateCategorySettingsPanel(categoryIndex)
 
     content:SetHeight(-y + 20)
 
-    panel.RefreshEditors = function()
+    local function RefreshCategorySelector()
+        selector:OverrideText(GetCategoryLabel(selectedCategoryIndex))
+    end
+
+    local function SelectCategory(categoryIndex)
+        if type(categoryIndex) ~= "number"
+            or categoryIndex < 1
+            or categoryIndex > MAX_CATEGORIES then
+            return
+        end
+
+        selectedCategoryIndex = categoryIndex
+
+        for _, editBox in ipairs(editors) do
+            editBox.categoryIndex = categoryIndex
+        end
+
+        scrollFrame:SetVerticalScroll(0)
+        panel.RefreshEditors()
+    end
+
+    selector:SetupMenu(function(_, rootDescription)
+        for categoryIndex = 1, MAX_CATEGORIES do
+            rootDescription:CreateRadio(
+                GetCategoryLabel(categoryIndex),
+                function()
+                    return selectedCategoryIndex == categoryIndex
+                end,
+                function()
+                    SelectCategory(categoryIndex)
+                end
+            )
+        end
+    end)
+
+    panel.RefreshEditors = function(changedCategoryIndex)
+        if changedCategoryIndex
+            and changedCategoryIndex ~= selectedCategoryIndex then
+            return
+        end
+
         local editable = Database.CanEditActiveProfile()
         resetButton:SetEnabled(editable)
         importButton:SetEnabled(editable)
@@ -1480,11 +1557,20 @@ local function CreateCategorySettingsPanel(categoryIndex)
         for _, editBox in ipairs(editors) do
             editBox:RefreshFromDatabase()
         end
+
+        RefreshCategorySelector()
     end
 
     panel:SetScript("OnShow", function(self)
         self.RefreshEditors()
     end)
+
+    panel.categorySelector = selector
+    panel.SelectCategory = SelectCategory
+    panel.GetSelectedCategory = function()
+        return selectedCategoryIndex
+    end
+    AddonSettings.RefreshCategorySelector = RefreshCategorySelector
 
     return panel
 end
@@ -1495,7 +1581,7 @@ function AddonSettings.CreateSettingsPanel()
     local generalPanel = CreateGeneralSettingsPanel()
     local appearancePanel = CreateAppearanceSettingsPanel()
     local profilesPanel = CreateProfilesSettingsPanel()
-    local categoryPanels = {}
+    local categoriesPanel = CreateCategoriesSettingsPanel()
 
     settingsCategory = Settings.RegisterCanvasLayoutCategory(aboutPanel, "RP Emote Menu")
     Settings.RegisterAddOnCategory(settingsCategory)
@@ -1520,15 +1606,11 @@ function AddonSettings.CreateSettingsPanel()
 
     AddonSettings.RefreshProfiles = profilesPanel.Refresh
 
-    for categoryIndex = 1, MAX_CATEGORIES do
-        local panel = CreateCategorySettingsPanel(categoryIndex)
-        categoryPanels[categoryIndex] = panel
-        categorySettingsCategories[categoryIndex] = Settings.RegisterCanvasLayoutSubcategory(
-            settingsCategory,
-            panel,
-            "Category " .. categoryIndex
-        )
-    end
+    categoriesSettingsCategory = Settings.RegisterCanvasLayoutSubcategory(
+        settingsCategory,
+        categoriesPanel,
+        "Categories"
+    )
 
     AddonSettings.RefreshEditors = function(categoryIndex)
         if resetAllCategoriesButton then
@@ -1539,19 +1621,7 @@ function AddonSettings.CreateSettingsPanel()
             exchangeDialog:UpdateActionState()
         end
 
-        if categoryIndex then
-            local panel = categoryPanels[categoryIndex]
-            if panel and panel.RefreshEditors then
-                panel.RefreshEditors()
-            end
-            return
-        end
-
-        for _, panel in ipairs(categoryPanels) do
-            if panel.RefreshEditors then
-                panel.RefreshEditors()
-            end
-        end
+        categoriesPanel.RefreshEditors(categoryIndex)
     end
 end
 

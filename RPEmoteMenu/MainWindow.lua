@@ -40,6 +40,11 @@ local categoryButtons = {}
 local buttonsPool = {}
 local isWindowCollapsed = false
 local fadeGeneration = 0
+local opacityAnimationGroup
+local opacityAnimation
+local opacityAnimationTarget
+local fadeOutDuration = 0.5
+local fadeInDuration = 0.2
 
 local function RefreshGeneralWindowFields()
     if addon.Settings and addon.Settings.RefreshGeneralWindowFields then
@@ -219,11 +224,47 @@ local function ApplyFont(fontString, size, color)
     fontString:SetTextColor(color.r, color.g, color.b, 1)
 end
 
-local function RestoreActiveOpacity()
+local function SetWindowOpacity(targetOpacity, duration)
+    if not MainFrame then
+        return
+    end
+
+    local currentOpacity = MainFrame:GetAlpha()
+
+    if opacityAnimationGroup and opacityAnimationGroup:IsPlaying() then
+        opacityAnimationGroup:Stop()
+    end
+
+    if not duration or math.abs(currentOpacity - targetOpacity) < 0.001 then
+        MainFrame:SetAlpha(targetOpacity)
+        return
+    end
+
+    if not opacityAnimationGroup then
+        opacityAnimationGroup = MainFrame:CreateAnimationGroup()
+        opacityAnimation = opacityAnimationGroup:CreateAnimation("Alpha")
+        opacityAnimation:SetSmoothing("IN_OUT")
+        opacityAnimationGroup:SetScript("OnFinished", function()
+            MainFrame:SetAlpha(opacityAnimationTarget)
+        end)
+    end
+
+    MainFrame:SetAlpha(currentOpacity)
+    opacityAnimationTarget = targetOpacity
+    opacityAnimation:SetFromAlpha(currentOpacity)
+    opacityAnimation:SetToAlpha(targetOpacity)
+    opacityAnimation:SetDuration(duration)
+    opacityAnimationGroup:Play()
+end
+
+local function RestoreActiveOpacity(animate)
     fadeGeneration = fadeGeneration + 1
 
     if MainFrame then
-        MainFrame:SetAlpha(settings.windowOpacity)
+        SetWindowOpacity(
+            settings.windowOpacity,
+            animate and fadeInDuration or nil
+        )
     end
 end
 
@@ -242,12 +283,15 @@ local function ScheduleInactiveFade()
             return
         end
 
-        MainFrame:SetAlpha(math.min(settings.inactiveOpacity, settings.windowOpacity))
+        SetWindowOpacity(
+            math.min(settings.inactiveOpacity, settings.windowOpacity),
+            fadeOutDuration
+        )
     end)
 end
 
 function MainWindow.NotifyActivity()
-    RestoreActiveOpacity()
+    RestoreActiveOpacity(true)
 end
 
 function MainWindow.ApplyFadeSettings()
