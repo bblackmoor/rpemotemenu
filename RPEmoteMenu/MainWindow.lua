@@ -800,7 +800,7 @@ function MainWindow.CreateMainWindow()
     SettingsBtn:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
 
     SettingsBtn:SetScript("OnClick", function()
-        addon.Settings.Open()
+        addon.Settings.OpenAbout()
     end)
 
     SettingsBtn:SetScript("OnEnter", function(self)

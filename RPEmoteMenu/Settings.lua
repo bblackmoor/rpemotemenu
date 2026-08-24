@@ -1659,6 +1659,12 @@ function AddonSettings.CreateSettingsPanel()
     end
 end
 
+AddonSettings.OpenAbout = function()
+    if settingsCategory then
+        Settings.OpenToCategory(settingsCategory:GetID())
+    end
+end
+
 AddonSettings.Open = function()
     if generalSettingsCategory then
         Settings.OpenToCategory(generalSettingsCategory:GetID())
