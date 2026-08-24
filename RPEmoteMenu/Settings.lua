@@ -10,6 +10,7 @@ local MAX_CATEGORIES = addon.MAX_CATEGORIES
 local MAX_EMOTES = addon.MAX_EMOTES
 local settingsCategory
 local generalSettingsCategory
+local profilesSettingsCategory
 local categorySettingsCategories = {}
 local resetAllCategoriesButton
 
@@ -382,6 +383,191 @@ local function CreateGeneralSettingsPanel()
     return panel
 end
 
+local function CreateProfilesSettingsPanel()
+    local panel = CreateFrame("Frame")
+
+    local heading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    heading:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -16)
+    heading:SetText("Profiles")
+
+    local description = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    description:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -8)
+    description:SetWidth(620)
+    description:SetJustifyH("LEFT")
+    description:SetText(
+        "Choose a profile for this character, or create an editable copy of the defaults. " ..
+        "The Default profile cannot be edited, renamed, or deleted."
+    )
+    description:SetTextColor(0.8, 0.8, 0.8)
+
+    local currentProfileLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    currentProfileLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -80)
+    currentProfileLabel:SetText("Current profile")
+
+    local selector = CreateFrame("DropdownButton", nil, panel, "WowStyle1DropdownTemplate")
+    selector:SetWidth(300)
+    selector:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -100)
+    selector:SetDefaultText(Database.GetActiveProfileName())
+
+    local nameLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    nameLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -150)
+    nameLabel:SetText("New profile name")
+
+    local nameInput = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+    nameInput:SetSize(290, 24)
+    nameInput:SetPoint("TOPLEFT", panel, "TOPLEFT", 26, -172)
+    nameInput:SetAutoFocus(false)
+    nameInput:SetMaxLetters(64)
+    nameInput:SetFont(STANDARD_TEXT_FONT, 12, "")
+    nameInput:SetTextColor(1, 1, 1, 1)
+
+    local status = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    status:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -248)
+    status:SetWidth(620)
+    status:SetJustifyH("LEFT")
+
+    local createButton
+    local copyButton
+    local renameButton
+    local deleteButton
+
+    local function UpdateButtonState()
+        local hasName = strtrim(nameInput:GetText() or "") ~= ""
+        local editable = Database.CanEditActiveProfile()
+
+        createButton:SetEnabled(hasName)
+        copyButton:SetEnabled(hasName)
+        renameButton:SetEnabled(hasName and editable)
+        deleteButton:SetEnabled(editable)
+    end
+
+    local function SetStatus(message, isError)
+        status:SetText(message or "")
+
+        if isError then
+            status:SetTextColor(1, 0.35, 0.35, 1)
+        else
+            status:SetTextColor(0.35, 1, 0.45, 1)
+        end
+    end
+
+    local function BuildProfileMenu(_, rootDescription)
+        for _, profileName in ipairs(Database.GetProfileNames()) do
+            rootDescription:CreateRadio(
+                profileName,
+                function()
+                    return Database.GetActiveProfileName() == profileName
+                end,
+                function()
+                    local success, errorMessage = Database.SetActiveProfile(profileName)
+
+                    if success then
+                        SetStatus("Using profile " .. profileName .. ".")
+                    else
+                        SetStatus(errorMessage, true)
+                    end
+                end
+            )
+        end
+    end
+
+    selector:SetupMenu(BuildProfileMenu)
+
+    createButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    createButton:SetSize(125, 24)
+    createButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -210)
+    createButton:SetText("Create Profile")
+    createButton:SetScript("OnClick", function()
+        local success, result = Database.CreateProfile(nameInput:GetText())
+
+        if success then
+            nameInput:SetText("")
+            SetStatus("Created profile " .. result .. ".")
+            UpdateButtonState()
+        else
+            SetStatus(result, true)
+        end
+    end)
+
+    copyButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    copyButton:SetSize(125, 24)
+    copyButton:SetPoint("LEFT", createButton, "RIGHT", 8, 0)
+    copyButton:SetText("Copy Profile")
+    copyButton:SetScript("OnClick", function()
+        local success, result = Database.CopyProfile(
+            Database.GetActiveProfileName(),
+            nameInput:GetText()
+        )
+
+        if success then
+            nameInput:SetText("")
+            SetStatus("Copied profile to " .. result .. ".")
+            UpdateButtonState()
+        else
+            SetStatus(result, true)
+        end
+    end)
+
+    renameButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    renameButton:SetSize(125, 24)
+    renameButton:SetPoint("LEFT", copyButton, "RIGHT", 8, 0)
+    renameButton:SetText("Rename Profile")
+    renameButton:SetScript("OnClick", function()
+        local success, result = Database.RenameProfile(
+            Database.GetActiveProfileName(),
+            nameInput:GetText()
+        )
+
+        if success then
+            nameInput:SetText("")
+            SetStatus("Renamed profile to " .. result .. ".")
+            UpdateButtonState()
+        else
+            SetStatus(result, true)
+        end
+    end)
+
+    deleteButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    deleteButton:SetSize(125, 24)
+    deleteButton:SetPoint("LEFT", renameButton, "RIGHT", 8, 0)
+    deleteButton:SetText("Delete Profile")
+    deleteButton:SetScript("OnClick", function()
+        local profileName = Database.GetActiveProfileName()
+        local success, errorMessage = Database.DeleteProfile(profileName)
+
+        if success then
+            SetStatus("Deleted profile " .. profileName .. ".")
+        else
+            SetStatus(errorMessage, true)
+        end
+    end)
+
+    nameInput:SetScript("OnTextChanged", function(_, userInput)
+        if userInput then
+            UpdateButtonState()
+        end
+    end)
+
+    nameInput:SetScript("OnEnterPressed", function(self)
+        createButton:Click()
+        self:ClearFocus()
+    end)
+
+    nameInput:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
+    end)
+
+    panel.Refresh = function()
+        selector:OverrideText(Database.GetActiveProfileName())
+        UpdateButtonState()
+    end
+
+    panel:SetScript("OnShow", panel.Refresh)
+
+    panel.Refresh()
+    return panel
+end
+
 local function CreateCategorySettingsPanel(categoryIndex)
     local panel = CreateFrame("Frame")
 
@@ -501,6 +687,7 @@ function AddonSettings.CreateSettingsPanel()
     settings = Database.GetSettings()
     local aboutPanel = CreateAboutPanel()
     local generalPanel = CreateGeneralSettingsPanel()
+    local profilesPanel = CreateProfilesSettingsPanel()
     local categoryPanels = {}
 
     settingsCategory = Settings.RegisterCanvasLayoutCategory(aboutPanel, "RP Emote Menu")
@@ -511,6 +698,14 @@ function AddonSettings.CreateSettingsPanel()
         generalPanel,
         "General"
     )
+
+    profilesSettingsCategory = Settings.RegisterCanvasLayoutSubcategory(
+        settingsCategory,
+        profilesPanel,
+        "Profiles"
+    )
+
+    AddonSettings.RefreshProfiles = profilesPanel.Refresh
 
     for categoryIndex = 1, MAX_CATEGORIES do
         local panel = CreateCategorySettingsPanel(categoryIndex)

@@ -9,6 +9,7 @@ local MAX_CATEGORIES = addon.MAX_CATEGORIES
 local MAX_EMOTES = addon.MAX_EMOTES
 local SCHEMA_VERSION = 3
 local DEFAULT_PROFILE_NAME = "Default"
+local MAX_PROFILE_NAME_LENGTH = 64
 local VALID_ANCHOR_POINTS = {
     TOPLEFT = true,
     TOP = true,
@@ -75,6 +76,34 @@ local function NormalizeCategories(categories)
             emote.defaultCommand = NormalizeString(emote.defaultCommand)
             emote.targetedCommand = NormalizeString(emote.targetedCommand)
         end
+    end
+
+    return categories
+end
+
+local function CopyCategories(sourceCategories)
+    local categories = {}
+
+    for categoryIndex = 1, MAX_CATEGORIES do
+        local sourceCategory = sourceCategories[categoryIndex]
+        local category = {
+            name = NormalizeString(sourceCategory and sourceCategory.name),
+            emotes = {}
+        }
+
+        for emoteIndex = 1, MAX_EMOTES do
+            local source = sourceCategory
+                and sourceCategory.emotes
+                and sourceCategory.emotes[emoteIndex]
+
+            category.emotes[emoteIndex] = {
+                label = NormalizeString(source and source.label),
+                defaultCommand = NormalizeString(source and source.defaultCommand),
+                targetedCommand = NormalizeString(source and source.targetedCommand)
+            }
+        end
+
+        categories[categoryIndex] = category
     end
 
     return categories
@@ -148,6 +177,206 @@ end
 
 function Database.GetCategory(categoryIndex)
     return Database.GetCategories()[categoryIndex]
+end
+
+local function FindProfileByName(profileName)
+    local requestedName = string.lower(profileName)
+
+    for existingName in pairs(RPEmoteMenuDB.profiles) do
+        if string.lower(existingName) == requestedName then
+            return existingName
+        end
+    end
+
+    return nil
+end
+
+local function ValidateNewProfileName(profileName, existingProfileName)
+    if type(profileName) ~= "string" then
+        return nil, "Enter a profile name."
+    end
+
+    profileName = strtrim(profileName)
+
+    if profileName == "" then
+        return nil, "Enter a profile name."
+    end
+
+    if #profileName > MAX_PROFILE_NAME_LENGTH then
+        return nil, "Profile names cannot exceed 64 characters."
+    end
+
+    if string.lower(profileName) == string.lower(DEFAULT_PROFILE_NAME) then
+        return nil, "Default is reserved and cannot be changed."
+    end
+
+    local matchingProfile = FindProfileByName(profileName)
+    if matchingProfile and matchingProfile ~= existingProfileName then
+        return nil, "A profile with that name already exists."
+    end
+
+    if matchingProfile == existingProfileName and profileName == existingProfileName then
+        return nil, "Enter a different profile name."
+    end
+
+    return profileName
+end
+
+local function RefreshProfileViews()
+    if addon.MainWindow and addon.MainWindow.SetSelectedCategory then
+        addon.MainWindow.SetSelectedCategory(1)
+    end
+
+    if addon.MainWindow and addon.MainWindow.UpdateMenu then
+        addon.MainWindow.UpdateMenu()
+    end
+
+    if addon.Settings and addon.Settings.RefreshEditors then
+        addon.Settings.RefreshEditors()
+    end
+
+    if addon.Settings and addon.Settings.RefreshProfiles then
+        addon.Settings.RefreshProfiles()
+    end
+end
+
+function Database.GetProfileNames()
+    local names = {}
+
+    for profileName in pairs(RPEmoteMenuDB.profiles) do
+        names[#names + 1] = profileName
+    end
+
+    table.sort(names, function(first, second)
+        if first == DEFAULT_PROFILE_NAME then
+            return true
+        end
+
+        if second == DEFAULT_PROFILE_NAME then
+            return false
+        end
+
+        local firstLower = string.lower(first)
+        local secondLower = string.lower(second)
+
+        if firstLower == secondLower then
+            return first < second
+        end
+
+        return firstLower < secondLower
+    end)
+
+    return names
+end
+
+function Database.SetActiveProfile(profileName)
+    if type(profileName) ~= "string"
+        or type(RPEmoteMenuDB.profiles[profileName]) ~= "table" then
+        return false, "That profile does not exist."
+    end
+
+    local characterKey = Database.GetCharacterKey()
+    if not characterKey then
+        return false, "Your character is not available yet."
+    end
+
+    RPEmoteMenuDB.activeProfiles[characterKey] = profileName
+    RefreshProfileViews()
+    return true
+end
+
+function Database.CreateProfile(profileName)
+    local validName, errorMessage = ValidateNewProfileName(profileName)
+    if not validName then
+        return false, errorMessage
+    end
+
+    local characterKey = Database.GetCharacterKey()
+    if not characterKey then
+        return false, "Your character is not available yet."
+    end
+
+    RPEmoteMenuDB.profiles[validName] = {
+        categories = CopyDefaultCategories()
+    }
+    RPEmoteMenuDB.activeProfiles[characterKey] = validName
+
+    RefreshProfileViews()
+    return true, validName
+end
+
+function Database.CopyProfile(sourceProfileName, newProfileName)
+    local source = RPEmoteMenuDB.profiles[sourceProfileName]
+    if type(source) ~= "table" then
+        return false, "The source profile does not exist."
+    end
+
+    local validName, errorMessage = ValidateNewProfileName(newProfileName)
+    if not validName then
+        return false, errorMessage
+    end
+
+    local characterKey = Database.GetCharacterKey()
+    if not characterKey then
+        return false, "Your character is not available yet."
+    end
+
+    RPEmoteMenuDB.profiles[validName] = {
+        categories = CopyCategories(source.categories)
+    }
+    RPEmoteMenuDB.activeProfiles[characterKey] = validName
+
+    RefreshProfileViews()
+    return true, validName
+end
+
+function Database.RenameProfile(oldProfileName, newProfileName)
+    if oldProfileName == DEFAULT_PROFILE_NAME then
+        return false, "The Default profile cannot be renamed."
+    end
+
+    local profile = RPEmoteMenuDB.profiles[oldProfileName]
+    if type(profile) ~= "table" then
+        return false, "That profile does not exist."
+    end
+
+    local validName, errorMessage = ValidateNewProfileName(newProfileName, oldProfileName)
+    if not validName then
+        return false, errorMessage
+    end
+
+    RPEmoteMenuDB.profiles[validName] = profile
+    RPEmoteMenuDB.profiles[oldProfileName] = nil
+
+    for characterKey, activeProfileName in pairs(RPEmoteMenuDB.activeProfiles) do
+        if activeProfileName == oldProfileName then
+            RPEmoteMenuDB.activeProfiles[characterKey] = validName
+        end
+    end
+
+    RefreshProfileViews()
+    return true, validName
+end
+
+function Database.DeleteProfile(profileName)
+    if profileName == DEFAULT_PROFILE_NAME then
+        return false, "The Default profile cannot be deleted."
+    end
+
+    if type(RPEmoteMenuDB.profiles[profileName]) ~= "table" then
+        return false, "That profile does not exist."
+    end
+
+    RPEmoteMenuDB.profiles[profileName] = nil
+
+    for characterKey, activeProfileName in pairs(RPEmoteMenuDB.activeProfiles) do
+        if activeProfileName == profileName then
+            RPEmoteMenuDB.activeProfiles[characterKey] = DEFAULT_PROFILE_NAME
+        end
+    end
+
+    RefreshProfileViews()
+    return true
 end
 
 function Database.InitializeDatabase()
