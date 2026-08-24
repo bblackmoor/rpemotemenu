@@ -267,7 +267,15 @@ local function GetExchangeDialog()
     end
 
     editBox:SetScript("OnTextChanged", function(self, userInput)
-        self:SetHeight(math.max(scrollFrame:GetHeight() or 0, (self:GetStringHeight() or 0) + 12))
+        local text = self:GetText() or ""
+        local charactersPerLine = math.max(1, math.floor((self:GetWidth() - 8) / 7))
+        local lineCount = 0
+
+        for line in (text .. "\n"):gmatch("([^\n]*)\n") do
+            lineCount = lineCount + math.max(1, math.ceil(#line / charactersPerLine))
+        end
+
+        self:SetHeight(math.max(scrollFrame:GetHeight() or 0, (lineCount * 16) + 12))
 
         if userInput then
             SetStatus("")
