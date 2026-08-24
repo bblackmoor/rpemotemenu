@@ -2,7 +2,8 @@
 
 set -eu
 
-toc="RPEmoteMenu.toc"
+repo_root=$(git rev-parse --show-toplevel)
+toc="$repo_root/RPEmoteMenu/RPEmoteMenu.toc"
 
 if [ ! -f "$toc" ]; then
     echo "Error: $toc not found."
