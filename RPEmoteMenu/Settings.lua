@@ -11,6 +11,7 @@ local MAX_CATEGORIES = addon.MAX_CATEGORIES
 local MAX_EMOTES = addon.MAX_EMOTES
 local settingsCategory
 local generalSettingsCategory
+local appearanceSettingsCategory
 local profilesSettingsCategory
 local categorySettingsCategories = {}
 local resetAllCategoriesButton
@@ -459,8 +460,9 @@ local function CreateAboutPanel()
     description:SetJustifyH("LEFT")
     description:SetText(
         "A configurable roleplaying emote menu with a category sidebar, " ..
-        "character-selected profiles, and JSON import/export. Organize up to " ..
-        "ten categories with ten emotes each, including optional targeted commands."
+        "character-selected profiles, JSON import/export, and customizable " ..
+        "appearance. Organize up to ten categories with ten emotes each, " ..
+        "including optional targeted commands."
     )
 
     local details = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -487,6 +489,11 @@ local function CreateAboutPanel()
         "    Share individual categories or complete profiles as JSON.\n" ..
         "    Category import replaces the selected category.\n" ..
         "    Profile import always creates a new named profile.\n\n" ..
+
+        "Fonts and colors\n" ..
+        "    Customize category and emote-label fonts and colors.\n" ..
+        "    Choose the background, border style, and window opacity.\n" ..
+        "    Optionally fade the menu after a period of inactivity.\n\n" ..
 
         "Slash Commands\n" ..
         "    /rpem - Show or hide the RP Emote Menu.\n" ..
@@ -558,6 +565,372 @@ local function CreateIntegerEditBox(parent, x, y, width, getValue, applyValue)
 
     editBox:RefreshValue()
     return editBox
+end
+
+local function Clamp(value, minimum, maximum)
+    return math.max(minimum, math.min(maximum, value))
+end
+
+local function CopyColor(color)
+    return {
+        r = color.r,
+        g = color.g,
+        b = color.b
+    }
+end
+
+local function GetPickerColor(value, fallback)
+    if type(value) ~= "table" then
+        return CopyColor(fallback)
+    end
+
+    return {
+        r = value.r or value[1] or fallback.r,
+        g = value.g or value[2] or fallback.g,
+        b = value.b or value[3] or fallback.b
+    }
+end
+
+local function CreateNumberSetting(
+    parent,
+    labelText,
+    settingKey,
+    x,
+    y,
+    minimum,
+    maximum,
+    getValue,
+    applyValue,
+    suffix
+)
+    local label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    label:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    label:SetText(labelText)
+
+    local editBox = CreateIntegerEditBox(
+        parent,
+        x,
+        y - 22,
+        70,
+        getValue,
+        function(value)
+            applyValue(Clamp(value, minimum, maximum))
+        end
+    )
+    editBox.settingKey = settingKey
+
+    if suffix then
+        local suffixLabel = parent:CreateFontString(
+            nil,
+            "OVERLAY",
+            "GameFontHighlightSmall"
+        )
+        suffixLabel:SetPoint("LEFT", editBox, "RIGHT", 6, 0)
+        suffixLabel:SetText(suffix)
+    end
+
+    return editBox
+end
+
+local function CreateColorSetting(
+    parent,
+    labelText,
+    settingKey,
+    x,
+    y,
+    getValue,
+    applyValue
+)
+    local label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    label:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    label:SetText(labelText)
+
+    local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    button:SetSize(52, 24)
+    button:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y - 22)
+    button:SetBackdrop({
+        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1
+    })
+    button:SetBackdropColor(0.08, 0.08, 0.08, 1)
+    button:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+    button.settingKey = settingKey
+
+    button.Swatch = button:CreateTexture(nil, "ARTWORK")
+    button.Swatch:SetPoint("TOPLEFT", button, "TOPLEFT", 4, -4)
+    button.Swatch:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -4, 4)
+
+    button.RefreshValue = function(self)
+        local color = getValue()
+        self.Swatch:SetColorTexture(color.r, color.g, color.b, 1)
+    end
+
+    button:SetScript("OnClick", function(self)
+        local originalColor = CopyColor(getValue())
+
+        local function ApplyPickerColor()
+            local r, g, b = ColorPickerFrame:GetColorRGB()
+            applyValue({r = r, g = g, b = b})
+            self:RefreshValue()
+        end
+
+        ColorPickerFrame:SetupColorPickerAndShow({
+            r = originalColor.r,
+            g = originalColor.g,
+            b = originalColor.b,
+            swatchFunc = ApplyPickerColor,
+            cancelFunc = function(previousColor)
+                applyValue(GetPickerColor(previousColor, originalColor))
+                self:RefreshValue()
+            end
+        })
+    end)
+
+    button:RefreshValue()
+    return button
+end
+
+local function CreateAppearanceSettingsPanel()
+    local panel = CreateFrame("Frame")
+    local controls = {}
+
+    local heading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    heading:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -16)
+    heading:SetText("Fonts and Colors")
+
+    local description = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    description:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -8)
+    description:SetWidth(620)
+    description:SetJustifyH("LEFT")
+    description:SetText(
+        "Customize the main menu for every profile. Changes appear immediately."
+    )
+    description:SetTextColor(0.8, 0.8, 0.8)
+
+    local typographyHeading = panel:CreateFontString(
+        nil,
+        "OVERLAY",
+        "GameFontNormal"
+    )
+    typographyHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -82)
+    typographyHeading:SetText("Typography")
+
+    controls.categoryFontSize = CreateNumberSetting(
+        panel, "Category font size", "categoryFontSize", 20, -112, 8, 24,
+        function() return settings.categoryFontSize end,
+        function(value)
+            settings.categoryFontSize = value
+            MainWindow.ApplyAppearance()
+        end,
+        "px"
+    )
+
+    controls.emoteFontSize = CreateNumberSetting(
+        panel, "Emote-label font size", "emoteFontSize", 330, -112, 8, 24,
+        function() return settings.emoteFontSize end,
+        function(value)
+            settings.emoteFontSize = value
+            MainWindow.ApplyAppearance()
+        end,
+        "px"
+    )
+
+    local colorsHeading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    colorsHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -172)
+    colorsHeading:SetText("Colors")
+
+    controls.categoryTextColor = CreateColorSetting(
+        panel, "Category text", "categoryTextColor", 20, -202,
+        function() return settings.categoryTextColor end,
+        function(value)
+            settings.categoryTextColor = value
+            MainWindow.ApplyAppearance()
+        end
+    )
+
+    controls.emoteTextColor = CreateColorSetting(
+        panel, "Emote-label text", "emoteTextColor", 330, -202,
+        function() return settings.emoteTextColor end,
+        function(value)
+            settings.emoteTextColor = value
+            MainWindow.ApplyAppearance()
+        end
+    )
+
+    controls.backgroundColor = CreateColorSetting(
+        panel, "Background", "backgroundColor", 20, -257,
+        function() return settings.backgroundColor end,
+        function(value)
+            settings.backgroundColor = value
+            MainWindow.ApplyAppearance()
+        end
+    )
+
+    controls.borderColor = CreateColorSetting(
+        panel, "Border", "borderColor", 330, -257,
+        function() return settings.borderColor end,
+        function(value)
+            settings.borderColor = value
+            MainWindow.ApplyAppearance()
+        end
+    )
+
+    local windowHeading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    windowHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -327)
+    windowHeading:SetText("Window")
+
+    local borderLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    borderLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -357)
+    borderLabel:SetText("Border style")
+
+    local borderSelector = CreateFrame(
+        "DropdownButton",
+        nil,
+        panel,
+        "WowStyle1DropdownTemplate"
+    )
+    borderSelector:SetWidth(190)
+    borderSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -378)
+    borderSelector:SetDefaultText("Thin")
+    borderSelector.settingKey = "borderStyle"
+    controls.borderStyle = borderSelector
+
+    local borderLabels = {
+        none = "None",
+        thin = "Thin",
+        blizzard = "Blizzard"
+    }
+
+    local function BuildBorderMenu(_, rootDescription)
+        for _, style in ipairs({"none", "thin", "blizzard"}) do
+            rootDescription:CreateRadio(
+                borderLabels[style],
+                function() return settings.borderStyle == style end,
+                function()
+                    settings.borderStyle = style
+                    borderSelector:OverrideText(borderLabels[style])
+                    MainWindow.ApplyAppearance()
+                end
+            )
+        end
+    end
+
+    borderSelector:SetupMenu(BuildBorderMenu)
+
+    controls.backgroundOpacity = CreateNumberSetting(
+        panel, "Background opacity", "backgroundOpacity", 330, -357, 0, 100,
+        function() return settings.backgroundOpacity * 100 end,
+        function(value)
+            settings.backgroundOpacity = value / 100
+            MainWindow.ApplyAppearance()
+        end,
+        "%"
+    )
+
+    controls.windowOpacity = CreateNumberSetting(
+        panel, "Active window opacity", "windowOpacity", 20, -437, 10, 100,
+        function() return settings.windowOpacity * 100 end,
+        function(value)
+            settings.windowOpacity = value / 100
+            settings.inactiveOpacity = math.min(
+                settings.inactiveOpacity,
+                settings.windowOpacity
+            )
+            MainWindow.ApplyAppearance()
+        end,
+        "%"
+    )
+
+    controls.inactiveOpacity = CreateNumberSetting(
+        panel, "Inactive opacity", "inactiveOpacity", 330, -437, 10, 100,
+        function() return settings.inactiveOpacity * 100 end,
+        function(value)
+            settings.inactiveOpacity = math.min(
+                value / 100,
+                settings.windowOpacity
+            )
+            MainWindow.ApplyFadeSettings()
+        end,
+        "%"
+    )
+
+    local fadeCheckbox = CreateCheckbox(
+        panel,
+        "Fade the menu when inactive",
+        -507,
+        function() return settings.fadeEnabled end,
+        function(value)
+            settings.fadeEnabled = value
+            MainWindow.ApplyFadeSettings()
+        end
+    )
+    fadeCheckbox.settingKey = "fadeEnabled"
+    controls.fadeEnabled = fadeCheckbox
+
+    controls.fadeDelay = CreateNumberSetting(
+        panel, "Fade after", "fadeDelay", 20, -552, 0, 60,
+        function() return settings.fadeDelay end,
+        function(value)
+            settings.fadeDelay = value
+            MainWindow.ApplyFadeSettings()
+        end,
+        "seconds"
+    )
+
+    local resetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    resetButton:SetSize(190, 24)
+    resetButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 330, -574)
+    resetButton:SetText("Reset Appearance")
+    resetButton.settingKey = "resetAppearance"
+    controls.resetAppearance = resetButton
+
+    local appearanceKeys = {
+        "categoryFontSize",
+        "emoteFontSize",
+        "categoryTextColor",
+        "emoteTextColor",
+        "backgroundColor",
+        "borderColor",
+        "borderStyle",
+        "backgroundOpacity",
+        "windowOpacity",
+        "fadeEnabled",
+        "fadeDelay",
+        "inactiveOpacity"
+    }
+
+    local function RefreshControls()
+        for key, control in pairs(controls) do
+            if control.RefreshValue then
+                control:RefreshValue()
+            end
+        end
+
+        borderSelector:OverrideText(borderLabels[settings.borderStyle])
+        fadeCheckbox:SetChecked(settings.fadeEnabled)
+    end
+
+    resetButton:SetScript("OnClick", function()
+        for _, key in ipairs(appearanceKeys) do
+            local value = addon.DefaultSettings[key]
+
+            if type(value) == "table" then
+                settings[key] = CopyColor(value)
+            else
+                settings[key] = value
+            end
+        end
+
+        RefreshControls()
+        MainWindow.ApplyAppearance()
+    end)
+
+    panel.RefreshControls = RefreshControls
+    panel.appearanceControls = controls
+    panel:SetScript("OnShow", RefreshControls)
+    RefreshControls()
+    return panel
 end
 
 local function CreateGeneralSettingsPanel()
@@ -1120,6 +1493,7 @@ function AddonSettings.CreateSettingsPanel()
     settings = Database.GetSettings()
     local aboutPanel = CreateAboutPanel()
     local generalPanel = CreateGeneralSettingsPanel()
+    local appearancePanel = CreateAppearanceSettingsPanel()
     local profilesPanel = CreateProfilesSettingsPanel()
     local categoryPanels = {}
 
@@ -1130,6 +1504,12 @@ function AddonSettings.CreateSettingsPanel()
         settingsCategory,
         generalPanel,
         "General"
+    )
+
+    appearanceSettingsCategory = Settings.RegisterCanvasLayoutSubcategory(
+        settingsCategory,
+        appearancePanel,
+        "Fonts and Colors"
     )
 
     profilesSettingsCategory = Settings.RegisterCanvasLayoutSubcategory(

@@ -21,12 +21,14 @@ local maximumWidth = 400
 local maximumHeight = 400
 local sidebarWidth = 112
 local categoryButtonHeight = 24
+local emoteButtonHeight = 20
 
 local MainFrame
 local CategorySidebar
 local CategoryScrollFrame
 local CategoryScrollChild
 local CategoryEmptyLabel
+local SidebarDivider
 local ScrollFrame
 local ScrollChild
 local ScrollTopIndicator
@@ -37,6 +39,7 @@ local ResizeGrip
 local categoryButtons = {}
 local buttonsPool = {}
 local isWindowCollapsed = false
+local fadeGeneration = 0
 
 local function RefreshGeneralWindowFields()
     if addon.Settings and addon.Settings.RefreshGeneralWindowFields then
@@ -209,6 +212,112 @@ function MainWindow.ApplySettingsGearVisibility()
     end
 end
 
+local function ApplyFont(fontString, size, color)
+    local fontFile, _, fontFlags = fontString:GetFont()
+
+    fontString:SetFont(fontFile or STANDARD_TEXT_FONT, size, fontFlags or "")
+    fontString:SetTextColor(color.r, color.g, color.b, 1)
+end
+
+local function RestoreActiveOpacity()
+    fadeGeneration = fadeGeneration + 1
+
+    if MainFrame then
+        MainFrame:SetAlpha(settings.windowOpacity)
+    end
+end
+
+local function ScheduleInactiveFade()
+    fadeGeneration = fadeGeneration + 1
+    local requestedGeneration = fadeGeneration
+
+    if not settings.fadeEnabled or not MainFrame then
+        return
+    end
+
+    C_Timer.After(settings.fadeDelay, function()
+        if requestedGeneration ~= fadeGeneration
+            or not settings.fadeEnabled
+            or MainFrame:IsMouseOver() then
+            return
+        end
+
+        MainFrame:SetAlpha(math.min(settings.inactiveOpacity, settings.windowOpacity))
+    end)
+end
+
+function MainWindow.NotifyActivity()
+    RestoreActiveOpacity()
+end
+
+function MainWindow.ApplyFadeSettings()
+    RestoreActiveOpacity()
+
+    if settings.fadeEnabled and MainFrame and not MainFrame:IsMouseOver() then
+        ScheduleInactiveFade()
+    end
+end
+
+function MainWindow.ApplyAppearance()
+    if not MainFrame then
+        return
+    end
+
+    local background = settings.backgroundColor
+    local border = settings.borderColor
+    local backdrop = {
+        bgFile = "Interface\\ChatFrame\\ChatFrameBackground"
+    }
+
+    if settings.borderStyle == "thin" then
+        backdrop.edgeFile = "Interface\\ChatFrame\\ChatFrameBackground"
+        backdrop.edgeSize = 1
+    elseif settings.borderStyle == "blizzard" then
+        backdrop.edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border"
+        backdrop.edgeSize = 12
+        backdrop.insets = {left = 3, right = 3, top = 3, bottom = 3}
+    end
+
+    MainFrame:SetBackdrop(backdrop)
+    MainFrame:SetBackdropColor(
+        background.r,
+        background.g,
+        background.b,
+        settings.backgroundOpacity
+    )
+    MainFrame:SetBackdropBorderColor(border.r, border.g, border.b, 1)
+
+    CategorySidebar:SetBackdropColor(
+        background.r,
+        background.g,
+        background.b,
+        settings.backgroundOpacity
+    )
+
+    if settings.borderStyle == "none" then
+        SidebarDivider:Hide()
+    else
+        SidebarDivider:SetColorTexture(border.r, border.g, border.b, 0.9)
+        SidebarDivider:Show()
+    end
+
+    categoryButtonHeight = math.max(24, settings.categoryFontSize + 10)
+    emoteButtonHeight = math.max(20, settings.emoteFontSize + 8)
+
+    for _, button in ipairs(categoryButtons) do
+        button:SetHeight(categoryButtonHeight)
+        ApplyFont(button.Text, settings.categoryFontSize, settings.categoryTextColor)
+    end
+
+    for _, button in ipairs(buttonsPool) do
+        button:SetHeight(emoteButtonHeight)
+        ApplyFont(button.Text, settings.emoteFontSize, settings.emoteTextColor)
+    end
+
+    MainWindow.ApplyFadeSettings()
+    MainWindow.UpdateMenu()
+end
+
 -- MENU RENDERING
 local function GetContainerButton()
     for _, button in ipairs(buttonsPool) do
@@ -218,13 +327,14 @@ local function GetContainerButton()
     end
 
     local button = CreateFrame("Button", nil, ScrollChild)
-    button:SetSize(math.max(ScrollChild:GetWidth() - 5, 1), 20)
+    button:SetSize(math.max(ScrollChild:GetWidth() - 5, 1), emoteButtonHeight)
 
     button.Text = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     button.Text:SetPoint("LEFT", button, "LEFT", 7, 0)
     button.Text:SetPoint("RIGHT", button, "RIGHT", -4, 0)
     button.Text:SetJustifyH("LEFT")
     button.Text:SetWordWrap(false)
+    ApplyFont(button.Text, settings.emoteFontSize, settings.emoteTextColor)
 
     table.insert(buttonsPool, button)
     return button
@@ -297,11 +407,16 @@ local function UpdateCategorySidebar()
 
             if categoryIndex == selectedCategoryIndex then
                 button.Selection:Show()
-                button.Text:SetTextColor(1.0, 0.82, 0.0, 1)
             else
                 button.Selection:Hide()
-                button.Text:SetTextColor(0.8, 0.8, 0.8, 1)
             end
+
+            button.Text:SetTextColor(
+                settings.categoryTextColor.r,
+                settings.categoryTextColor.g,
+                settings.categoryTextColor.b,
+                1
+            )
 
             button:Show()
             visibleCount = visibleCount + 1
@@ -368,6 +483,8 @@ local function UpdateScrollIndicators()
 end
 
 function MainWindow.UpdateMenu()
+    MainWindow.NotifyActivity()
+
     for _, button in ipairs(buttonsPool) do
         button:Hide()
         button:ClearAllPoints()
@@ -385,6 +502,7 @@ function MainWindow.UpdateMenu()
         ScrollChild:SetHeight(1)
         ScrollFrame:SetVerticalScroll(0)
         UpdateScrollIndicators()
+        ScheduleInactiveFade()
         return
     end
 
@@ -401,13 +519,18 @@ function MainWindow.UpdateMenu()
 
         emoteButton:SetPoint("TOPLEFT", ScrollChild, "TOPLEFT", 0, -dynamicY)
         emoteButton.Text:SetText(label)
-        emoteButton.Text:SetTextColor(1, 1, 1)
+        emoteButton.Text:SetTextColor(
+            settings.emoteTextColor.r,
+            settings.emoteTextColor.g,
+            settings.emoteTextColor.b,
+            1
+        )
         emoteButton:SetScript("OnClick", function()
             addon.Commands.ExecuteEmoteCommand(defaultCommand, targetedCommand)
         end)
         emoteButton:Show()
 
-        dynamicY = dynamicY + 22
+        dynamicY = dynamicY + emoteButtonHeight + 2
     end
 
     ScrollChild:SetHeight(math.max(dynamicY, 1))
@@ -416,6 +539,8 @@ function MainWindow.UpdateMenu()
     C_Timer.After(0, function()
         UpdateScrollIndicators()
     end)
+
+    ScheduleInactiveFade()
 end
 
 -- WINDOW COLLAPSE
@@ -494,14 +619,6 @@ function MainWindow.CreateMainWindow()
         end
     end)
 
-    MainFrame:SetBackdrop({
-        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
-        edgeFile = "Interface\\ChatFrame\\ChatFrameBackground",
-        edgeSize = 1
-    })
-    MainFrame:SetBackdropColor(0.12, 0.12, 0.12, 1)
-    MainFrame:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
-
     local title = MainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 10, -10)
     title:SetText("RP Emote Menu " .. addon.VERSION)
@@ -514,13 +631,10 @@ function MainWindow.CreateMainWindow()
     CategorySidebar:SetBackdrop({
         bgFile = "Interface\\ChatFrame\\ChatFrameBackground"
     })
-    CategorySidebar:SetBackdropColor(0.08, 0.08, 0.08, 0.95)
-
-    local sidebarDivider = CategorySidebar:CreateTexture(nil, "OVERLAY")
-    sidebarDivider:SetWidth(1)
-    sidebarDivider:SetPoint("TOPRIGHT", CategorySidebar, "TOPRIGHT", 0, 0)
-    sidebarDivider:SetPoint("BOTTOMRIGHT", CategorySidebar, "BOTTOMRIGHT", 0, 0)
-    sidebarDivider:SetColorTexture(0.3, 0.3, 0.3, 0.9)
+    SidebarDivider = CategorySidebar:CreateTexture(nil, "OVERLAY")
+    SidebarDivider:SetWidth(1)
+    SidebarDivider:SetPoint("TOPRIGHT", CategorySidebar, "TOPRIGHT", 0, 0)
+    SidebarDivider:SetPoint("BOTTOMRIGHT", CategorySidebar, "BOTTOMRIGHT", 0, 0)
 
     CategoryScrollFrame = CreateFrame("ScrollFrame", nil, CategorySidebar)
     CategoryScrollFrame:SetPoint("TOPLEFT", CategorySidebar, "TOPLEFT", 3, -3)
@@ -567,6 +681,7 @@ function MainWindow.CreateMainWindow()
         button.Text:SetPoint("RIGHT", button, "RIGHT", -5, 0)
         button.Text:SetJustifyH("LEFT")
         button.Text:SetWordWrap(false)
+        ApplyFont(button.Text, settings.categoryFontSize, settings.categoryTextColor)
 
         button:SetHighlightTexture(
             "Interface\\QuestFrame\\UI-QuestTitleHighlight",
@@ -675,6 +790,10 @@ function MainWindow.CreateMainWindow()
     RestoreWindowPosition()
     MainWindow.ApplyMovementLock()
     MainWindow.ApplySettingsGearVisibility()
+    MainWindow.ApplyAppearance()
+
+    MainFrame:HookScript("OnEnter", MainWindow.NotifyActivity)
+    MainFrame:HookScript("OnLeave", ScheduleInactiveFade)
 
     if settings.rememberMinimized then
         isWindowCollapsed = settings.minimized

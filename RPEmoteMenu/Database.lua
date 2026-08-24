@@ -10,6 +10,11 @@ local MAX_EMOTES = addon.MAX_EMOTES
 local SCHEMA_VERSION = 3
 local DEFAULT_PROFILE_NAME = "Default"
 local MAX_PROFILE_NAME_LENGTH = 64
+local VALID_BORDER_STYLES = {
+    none = true,
+    thin = true,
+    blizzard = true
+}
 local VALID_ANCHOR_POINTS = {
     TOPLEFT = true,
     TOP = true,
@@ -119,6 +124,26 @@ local function IsValidSavedValue(value, defaultValue)
     end
 
     return true
+end
+
+local function ClampNumber(value, minimum, maximum, defaultValue)
+    value = tonumber(value)
+
+    if not value or value ~= value or value == math.huge or value == -math.huge then
+        value = defaultValue
+    end
+
+    return math.max(minimum, math.min(maximum, value))
+end
+
+local function NormalizeColor(value, defaultValue)
+    value = type(value) == "table" and value or {}
+
+    return {
+        r = ClampNumber(value.r, 0, 1, defaultValue.r),
+        g = ClampNumber(value.g, 0, 1, defaultValue.g),
+        b = ClampNumber(value.b, 0, 1, defaultValue.b)
+    }
 end
 
 function Database.GetSettings()
@@ -408,6 +433,67 @@ function Database.InitializeDatabase()
         or RPEmoteMenuDB.selectedCategory > MAX_CATEGORIES then
         RPEmoteMenuDB.selectedCategory = defaults.selectedCategory
     end
+
+    RPEmoteMenuDB.categoryFontSize = math.floor(ClampNumber(
+        RPEmoteMenuDB.categoryFontSize,
+        8,
+        24,
+        defaults.categoryFontSize
+    ))
+    RPEmoteMenuDB.emoteFontSize = math.floor(ClampNumber(
+        RPEmoteMenuDB.emoteFontSize,
+        8,
+        24,
+        defaults.emoteFontSize
+    ))
+    RPEmoteMenuDB.categoryTextColor = NormalizeColor(
+        RPEmoteMenuDB.categoryTextColor,
+        defaults.categoryTextColor
+    )
+    RPEmoteMenuDB.emoteTextColor = NormalizeColor(
+        RPEmoteMenuDB.emoteTextColor,
+        defaults.emoteTextColor
+    )
+    RPEmoteMenuDB.backgroundColor = NormalizeColor(
+        RPEmoteMenuDB.backgroundColor,
+        defaults.backgroundColor
+    )
+    RPEmoteMenuDB.borderColor = NormalizeColor(
+        RPEmoteMenuDB.borderColor,
+        defaults.borderColor
+    )
+
+    if not VALID_BORDER_STYLES[RPEmoteMenuDB.borderStyle] then
+        RPEmoteMenuDB.borderStyle = defaults.borderStyle
+    end
+
+    RPEmoteMenuDB.backgroundOpacity = ClampNumber(
+        RPEmoteMenuDB.backgroundOpacity,
+        0,
+        1,
+        defaults.backgroundOpacity
+    )
+    RPEmoteMenuDB.windowOpacity = ClampNumber(
+        RPEmoteMenuDB.windowOpacity,
+        0.1,
+        1,
+        defaults.windowOpacity
+    )
+    RPEmoteMenuDB.fadeDelay = math.floor(ClampNumber(
+        RPEmoteMenuDB.fadeDelay,
+        0,
+        60,
+        defaults.fadeDelay
+    ))
+    RPEmoteMenuDB.inactiveOpacity = math.min(
+        ClampNumber(
+            RPEmoteMenuDB.inactiveOpacity,
+            0.1,
+            1,
+            defaults.inactiveOpacity
+        ),
+        RPEmoteMenuDB.windowOpacity
+    )
 
     -- Legacy pre-profile categories are intentionally discarded. Existing valid
     -- named profiles remain available, and Default is rebuilt every login so it

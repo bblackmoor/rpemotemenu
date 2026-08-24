@@ -153,6 +153,18 @@ addon.DefaultSettings = {
     y = 100,
     width = 250,
     height = 250,
+    categoryFontSize = 12,
+    emoteFontSize = 12,
+    categoryTextColor = {r = 0.8, g = 0.8, b = 0.8},
+    emoteTextColor = {r = 1.0, g = 1.0, b = 1.0},
+    backgroundColor = {r = 0.12, g = 0.12, b = 0.12},
+    borderColor = {r = 0.2, g = 0.2, b = 0.2},
+    borderStyle = "thin",
+    backgroundOpacity = 1.0,
+    windowOpacity = 1.0,
+    fadeEnabled = false,
+    fadeDelay = 5,
+    inactiveOpacity = 0.35,
     emoteDataVersion = 5
 }
 
