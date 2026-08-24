@@ -217,10 +217,14 @@ function MainWindow.ApplySettingsGearVisibility()
     end
 end
 
-local function ApplyFont(fontString, size, color)
-    local fontFile, _, fontFlags = fontString:GetFont()
+local function ApplyFont(fontString, fontName, size, color)
+    local _, _, fontFlags = fontString:GetFont()
+    local fontFile = addon.GetFontPath(fontName)
 
-    fontString:SetFont(fontFile or STANDARD_TEXT_FONT, size, fontFlags or "")
+    if not fontString:SetFont(fontFile, size, fontFlags or "") then
+        fontString:SetFont(STANDARD_TEXT_FONT, size, fontFlags or "")
+    end
+
     fontString:SetTextColor(color.r, color.g, color.b, 1)
 end
 
@@ -350,12 +354,22 @@ function MainWindow.ApplyAppearance()
 
     for _, button in ipairs(categoryButtons) do
         button:SetHeight(categoryButtonHeight)
-        ApplyFont(button.Text, settings.categoryFontSize, settings.categoryTextColor)
+        ApplyFont(
+            button.Text,
+            settings.categoryFont,
+            settings.categoryFontSize,
+            settings.categoryTextColor
+        )
     end
 
     for _, button in ipairs(buttonsPool) do
         button:SetHeight(emoteButtonHeight)
-        ApplyFont(button.Text, settings.emoteFontSize, settings.emoteTextColor)
+        ApplyFont(
+            button.Text,
+            settings.emoteFont,
+            settings.emoteFontSize,
+            settings.emoteTextColor
+        )
     end
 
     MainWindow.ApplyFadeSettings()
@@ -378,7 +392,12 @@ local function GetContainerButton()
     button.Text:SetPoint("RIGHT", button, "RIGHT", -4, 0)
     button.Text:SetJustifyH("LEFT")
     button.Text:SetWordWrap(false)
-    ApplyFont(button.Text, settings.emoteFontSize, settings.emoteTextColor)
+    ApplyFont(
+        button.Text,
+        settings.emoteFont,
+        settings.emoteFontSize,
+        settings.emoteTextColor
+    )
 
     table.insert(buttonsPool, button)
     return button
@@ -725,7 +744,12 @@ function MainWindow.CreateMainWindow()
         button.Text:SetPoint("RIGHT", button, "RIGHT", -5, 0)
         button.Text:SetJustifyH("LEFT")
         button.Text:SetWordWrap(false)
-        ApplyFont(button.Text, settings.categoryFontSize, settings.categoryTextColor)
+        ApplyFont(
+            button.Text,
+            settings.categoryFont,
+            settings.categoryFontSize,
+            settings.categoryTextColor
+        )
 
         button:SetHighlightTexture(
             "Interface\\QuestFrame\\UI-QuestTitleHighlight",

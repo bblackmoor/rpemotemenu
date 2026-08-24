@@ -434,6 +434,14 @@ function Database.InitializeDatabase()
         RPEmoteMenuDB.selectedCategory = defaults.selectedCategory
     end
 
+    if strtrim(RPEmoteMenuDB.categoryFont) == "" then
+        RPEmoteMenuDB.categoryFont = defaults.categoryFont
+    end
+
+    if strtrim(RPEmoteMenuDB.emoteFont) == "" then
+        RPEmoteMenuDB.emoteFont = defaults.emoteFont
+    end
+
     RPEmoteMenuDB.categoryFontSize = math.floor(ClampNumber(
         RPEmoteMenuDB.categoryFontSize,
         8,

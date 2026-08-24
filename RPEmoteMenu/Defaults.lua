@@ -140,6 +140,70 @@ addon.DefaultSections = {
     }
 }
 
+addon.BuiltInFonts = {
+    {name = "Friz Quadrata", path = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"},
+    {name = "Arial Narrow", path = "Fonts\\ARIALN.TTF"},
+    {name = "Morpheus", path = "Fonts\\MORPHEUS.TTF"},
+    {name = "Skurri", path = "Fonts\\skurri.ttf"}
+}
+
+function addon.GetAvailableFonts()
+    local fonts = {}
+    local includedFonts = {}
+
+    for _, font in ipairs(addon.BuiltInFonts) do
+        fonts[#fonts + 1] = font
+        includedFonts[font.name] = true
+    end
+
+    local sharedMedia = LibStub and LibStub("LibSharedMedia-3.0", true)
+
+    if sharedMedia then
+        local sharedFonts = {}
+
+        for _, fontName in ipairs(sharedMedia:List("font")) do
+            local fontPath = sharedMedia:Fetch("font", fontName, true)
+
+            if not includedFonts[fontName]
+                and type(fontPath) == "string"
+                and fontPath ~= "" then
+                sharedFonts[#sharedFonts + 1] = {
+                    name = fontName,
+                    path = fontPath
+                }
+                includedFonts[fontName] = true
+            end
+        end
+
+        table.sort(sharedFonts, function(first, second)
+            return string.lower(first.name) < string.lower(second.name)
+        end)
+
+        for _, font in ipairs(sharedFonts) do
+            fonts[#fonts + 1] = font
+        end
+    end
+
+    return fonts
+end
+
+function addon.GetFontPath(fontName)
+    for _, font in ipairs(addon.BuiltInFonts) do
+        if font.name == fontName then
+            return font.path
+        end
+    end
+
+    local sharedMedia = LibStub and LibStub("LibSharedMedia-3.0", true)
+    local fontPath = sharedMedia and sharedMedia:Fetch("font", fontName, true)
+
+    if type(fontPath) == "string" and fontPath ~= "" then
+        return fontPath
+    end
+
+    return STANDARD_TEXT_FONT or addon.BuiltInFonts[1].path
+end
+
 addon.DefaultSettings = {
     locked = false,
     hideSettingsGear = false,
@@ -153,6 +217,8 @@ addon.DefaultSettings = {
     y = 100,
     width = 250,
     height = 250,
+    categoryFont = "Friz Quadrata",
+    emoteFont = "Friz Quadrata",
     categoryFontSize = 12,
     emoteFontSize = 12,
     categoryTextColor = {r = 0.8, g = 0.8, b = 0.8},

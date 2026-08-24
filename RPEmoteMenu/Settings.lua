@@ -732,6 +732,45 @@ local function CreateColorSetting(
     return button
 end
 
+local function CreateFontSetting(parent, labelText, settingKey, x, y)
+    local label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    label:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    label:SetText(labelText)
+
+    local selector = CreateFrame(
+        "DropdownButton",
+        nil,
+        parent,
+        "WowStyle1DropdownTemplate"
+    )
+    selector:SetWidth(190)
+    selector:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y - 21)
+    selector.settingKey = settingKey
+
+    selector.RefreshValue = function(self)
+        self:OverrideText(settings[settingKey])
+    end
+
+    selector:SetupMenu(function(_, rootDescription)
+        for _, font in ipairs(addon.GetAvailableFonts()) do
+            local fontName = font.name
+
+            rootDescription:CreateRadio(
+                fontName,
+                function() return settings[settingKey] == fontName end,
+                function()
+                    settings[settingKey] = fontName
+                    selector:RefreshValue()
+                    MainWindow.ApplyAppearance()
+                end
+            )
+        end
+    end)
+
+    selector:RefreshValue()
+    return selector
+end
+
 local function CreateAppearanceSettingsPanel()
     local panel = CreateFrame("Frame")
     local controls = {}
@@ -757,8 +796,12 @@ local function CreateAppearanceSettingsPanel()
     typographyHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -82)
     typographyHeading:SetText("Typography")
 
+    controls.categoryFont = CreateFontSetting(
+        panel, "Category font", "categoryFont", 20, -112
+    )
+
     controls.categoryFontSize = CreateNumberSetting(
-        panel, "Category font size", "categoryFontSize", 20, -112, 8, 24,
+        panel, "Size", "categoryFontSize", 230, -112, 8, 24,
         function() return settings.categoryFontSize end,
         function(value)
             settings.categoryFontSize = value
@@ -767,8 +810,12 @@ local function CreateAppearanceSettingsPanel()
         "px"
     )
 
+    controls.emoteFont = CreateFontSetting(
+        panel, "Emote font", "emoteFont", 330, -112
+    )
+
     controls.emoteFontSize = CreateNumberSetting(
-        panel, "Emote-label font size", "emoteFontSize", 330, -112, 8, 24,
+        panel, "Size", "emoteFontSize", 540, -112, 8, 24,
         function() return settings.emoteFontSize end,
         function(value)
             settings.emoteFontSize = value
@@ -927,6 +974,8 @@ local function CreateAppearanceSettingsPanel()
     controls.resetAppearance = resetButton
 
     local appearanceKeys = {
+        "categoryFont",
+        "emoteFont",
         "categoryFontSize",
         "emoteFontSize",
         "categoryTextColor",
