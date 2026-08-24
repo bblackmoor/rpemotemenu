@@ -306,6 +306,32 @@ function MainWindow.ApplyFadeSettings()
     end
 end
 
+function MainWindow.RefreshFont(settingKey, fontName)
+    if not MainFrame or settings[settingKey] ~= fontName then
+        return
+    end
+
+    local buttons
+    local fontSize
+    local textColor
+
+    if settingKey == "categoryFont" then
+        buttons = categoryButtons
+        fontSize = settings.categoryFontSize
+        textColor = settings.categoryTextColor
+    elseif settingKey == "emoteFont" then
+        buttons = buttonsPool
+        fontSize = settings.emoteFontSize
+        textColor = settings.emoteTextColor
+    else
+        return
+    end
+
+    for _, button in ipairs(buttons) do
+        ApplyFont(button.Text, fontName, fontSize, textColor)
+    end
+end
+
 function MainWindow.ApplyAppearance()
     if not MainFrame then
         return

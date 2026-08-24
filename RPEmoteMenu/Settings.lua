@@ -733,6 +733,7 @@ local function CreateColorSetting(
 end
 
 local function CreateFontSetting(parent, labelText, settingKey, x, y)
+    local selectionGeneration = 0
     local label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     label:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
     label:SetText(labelText)
@@ -759,9 +760,31 @@ local function CreateFontSetting(parent, labelText, settingKey, x, y)
                 fontName,
                 function() return settings[settingKey] == fontName end,
                 function()
+                    selectionGeneration = selectionGeneration + 1
+                    local currentGeneration = selectionGeneration
+
                     settings[settingKey] = fontName
                     selector:RefreshValue()
                     MainWindow.ApplyAppearance()
+
+                    local isCustomFont = true
+
+                    for _, builtInFont in ipairs(addon.BuiltInFonts) do
+                        if builtInFont.name == fontName then
+                            isCustomFont = false
+                            break
+                        end
+                    end
+
+                    if isCustomFont then
+                        for _, delay in ipairs({0.25, 0.75, 1.5, 3}) do
+                            C_Timer.After(delay, function()
+                                if selectionGeneration == currentGeneration then
+                                    MainWindow.RefreshFont(settingKey, fontName)
+                                end
+                            end)
+                        end
+                    end
                 end
             )
         end
@@ -824,12 +847,25 @@ local function CreateAppearanceSettingsPanel()
         "px"
     )
 
+    local fontLoadingNote = panel:CreateFontString(
+        nil,
+        "OVERLAY",
+        "GameFontHighlightSmall"
+    )
+    fontLoadingNote:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -166)
+    fontLoadingNote:SetWidth(620)
+    fontLoadingNote:SetJustifyH("LEFT")
+    fontLoadingNote:SetText(
+        "Custom fonts may take a few seconds to appear the first time they are selected."
+    )
+    fontLoadingNote:SetTextColor(0.7, 0.7, 0.7)
+
     local colorsHeading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    colorsHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -172)
+    colorsHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -190)
     colorsHeading:SetText("Colors")
 
     controls.categoryTextColor = CreateColorSetting(
-        panel, "Category text", "categoryTextColor", 20, -202,
+        panel, "Category text", "categoryTextColor", 20, -218,
         function() return settings.categoryTextColor end,
         function(value)
             settings.categoryTextColor = value
@@ -838,7 +874,7 @@ local function CreateAppearanceSettingsPanel()
     )
 
     controls.emoteTextColor = CreateColorSetting(
-        panel, "Emote-label text", "emoteTextColor", 330, -202,
+        panel, "Emote-label text", "emoteTextColor", 330, -218,
         function() return settings.emoteTextColor end,
         function(value)
             settings.emoteTextColor = value
@@ -847,7 +883,7 @@ local function CreateAppearanceSettingsPanel()
     )
 
     controls.backgroundColor = CreateColorSetting(
-        panel, "Background", "backgroundColor", 20, -257,
+        panel, "Background", "backgroundColor", 20, -273,
         function() return settings.backgroundColor end,
         function(value)
             settings.backgroundColor = value
@@ -856,7 +892,7 @@ local function CreateAppearanceSettingsPanel()
     )
 
     controls.borderColor = CreateColorSetting(
-        panel, "Border", "borderColor", 330, -257,
+        panel, "Border", "borderColor", 330, -273,
         function() return settings.borderColor end,
         function(value)
             settings.borderColor = value
