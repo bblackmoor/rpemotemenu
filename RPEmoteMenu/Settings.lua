@@ -730,13 +730,12 @@ local function CreateProfilesSettingsPanel()
     local importProfileButton
 
     local function UpdateButtonState()
-        local hasName = strtrim(nameInput:GetText() or "") ~= ""
         local editable = Database.CanEditActiveProfile()
         local validNewProfileName = Database.ValidateNewProfileName(nameInput:GetText())
 
-        createButton:SetEnabled(hasName)
-        copyButton:SetEnabled(hasName)
-        renameButton:SetEnabled(hasName and editable)
+        createButton:SetEnabled(validNewProfileName ~= nil)
+        copyButton:SetEnabled(validNewProfileName ~= nil)
+        renameButton:SetEnabled(editable)
         deleteButton:SetEnabled(editable)
         importProfileButton:SetEnabled(validNewProfileName ~= nil)
     end
@@ -750,6 +749,56 @@ local function CreateProfilesSettingsPanel()
             status:SetTextColor(0.35, 1, 0.45, 1)
         end
     end
+
+    StaticPopupDialogs["RPEMOTEMENU_RENAME_PROFILE"] = {
+        text = 'Rename the profile "%s".',
+        button1 = "Rename",
+        button2 = CANCEL or "Cancel",
+        hasEditBox = true,
+        maxLetters = 64,
+        editBoxWidth = 260,
+        OnShow = function(self, profileName)
+            self.editBox:SetText(profileName or self.data)
+            self.editBox:HighlightText()
+            self.editBox:SetFocus()
+            self.button1:SetEnabled(false)
+        end,
+        OnAccept = function(self, profileName)
+            local success, result = Database.RenameProfile(
+                profileName,
+                self.editBox:GetText()
+            )
+
+            if success then
+                SetStatus("Renamed profile to " .. result .. ".")
+            else
+                SetStatus(result, true)
+            end
+        end,
+        EditBoxOnTextChanged = function(self)
+            local popup = self:GetParent()
+            local validName = Database.ValidateNewProfileName(
+                self:GetText(),
+                popup.data
+            )
+
+            popup.button1:SetEnabled(validName ~= nil)
+        end,
+        EditBoxOnEnterPressed = function(self)
+            local popup = self:GetParent()
+
+            if popup.button1:IsEnabled() then
+                popup.button1:Click()
+            end
+        end,
+        EditBoxOnEscapePressed = function(self)
+            self:GetParent():Hide()
+        end,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+        preferredIndex = 3
+    }
 
     StaticPopupDialogs["RPEMOTEMENU_DELETE_PROFILE"] = {
         text = 'Delete the profile "%s"?\n\nCharacters using it will return to Default.',
@@ -832,18 +881,13 @@ local function CreateProfilesSettingsPanel()
     renameButton:SetPoint("TOPLEFT", selector, "BOTTOMLEFT", 0, -8)
     renameButton:SetText("Rename Profile")
     renameButton:SetScript("OnClick", function()
-        local success, result = Database.RenameProfile(
-            Database.GetActiveProfileName(),
-            nameInput:GetText()
-        )
+        local profileName = Database.GetActiveProfileName()
 
-        if success then
-            nameInput:SetText("")
-            SetStatus("Renamed profile to " .. result .. ".")
-            UpdateButtonState()
-        else
-            SetStatus(result, true)
+        if not Database.CanEditActiveProfile() then
+            return
         end
+
+        StaticPopup_Show("RPEMOTEMENU_RENAME_PROFILE", profileName, nil, profileName)
     end)
 
     deleteButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")

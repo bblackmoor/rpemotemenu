@@ -222,8 +222,8 @@ local function ValidateNewProfileName(profileName, existingProfileName)
     return profileName
 end
 
-function Database.ValidateNewProfileName(profileName)
-    return ValidateNewProfileName(profileName)
+function Database.ValidateNewProfileName(profileName, existingProfileName)
+    return ValidateNewProfileName(profileName, existingProfileName)
 end
 
 local function RefreshProfileViews()
