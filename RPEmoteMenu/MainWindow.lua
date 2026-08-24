@@ -3,7 +3,9 @@ local _, addon = ...
 addon.MainWindow = {}
 
 local MainWindow = addon.MainWindow
+local Database = addon.Database
 local defaults = addon.DefaultSettings
+local settings
 local MAX_CATEGORIES = addon.MAX_CATEGORIES
 local MAX_EMOTES = addon.MAX_EMOTES
 local selectedCategoryIndex = 1
@@ -42,14 +44,14 @@ local function ClampWindowGeometry(x, y, width, height)
     local screenWidth = math.floor(UIParent:GetWidth() + 0.5)
     local screenHeight = math.floor(UIParent:GetHeight() + 0.5)
 
-    width = math.floor(tonumber(width) or RPEmoteMenuDB.width or defaults.width)
-    height = math.floor(tonumber(height) or RPEmoteMenuDB.height or defaults.height)
+    width = math.floor(tonumber(width) or settings.width or defaults.width)
+    height = math.floor(tonumber(height) or settings.height or defaults.height)
 
     width = math.max(minimumWidth, math.min(maximumWidth, screenWidth, width))
     height = math.max(minimumHeight, math.min(maximumHeight, screenHeight, height))
 
-    x = math.floor(tonumber(x) or RPEmoteMenuDB.x or 0)
-    y = math.floor(tonumber(y) or RPEmoteMenuDB.y or screenHeight)
+    x = math.floor(tonumber(x) or settings.x or 0)
+    y = math.floor(tonumber(y) or settings.y or screenHeight)
 
     -- x/y represent the window's TOPLEFT point relative to UIParent's BOTTOMLEFT.
     -- Keep the entire frame on-screen.
@@ -62,12 +64,12 @@ end
 function MainWindow.ApplyWindowGeometry(x, y, width, height)
     x, y, width, height = ClampWindowGeometry(x, y, width, height)
 
-    RPEmoteMenuDB.point = "TOPLEFT"
-    RPEmoteMenuDB.relativePoint = "BOTTOMLEFT"
-    RPEmoteMenuDB.x = x
-    RPEmoteMenuDB.y = y
-    RPEmoteMenuDB.width = width
-    RPEmoteMenuDB.height = height
+    settings.point = "TOPLEFT"
+    settings.relativePoint = "BOTTOMLEFT"
+    settings.x = x
+    settings.y = y
+    settings.width = width
+    settings.height = height
 
     MainFrame:ClearAllPoints()
     MainFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x, y)
@@ -90,12 +92,12 @@ local function SaveWindowPosition()
     end
 
     -- Always save the window relative to its upper-left corner.
-    RPEmoteMenuDB.point = "TOPLEFT"
-    RPEmoteMenuDB.relativePoint = "BOTTOMLEFT"
+    settings.point = "TOPLEFT"
+    settings.relativePoint = "BOTTOMLEFT"
 
-    local x, y = ClampWindowGeometry(left, top, RPEmoteMenuDB.width, RPEmoteMenuDB.height)
-    RPEmoteMenuDB.x = x
-    RPEmoteMenuDB.y = y
+    local x, y = ClampWindowGeometry(left, top, settings.width, settings.height)
+    settings.x = x
+    settings.y = y
 
     RefreshGeneralWindowFields()
 end
@@ -103,38 +105,38 @@ end
 local function RestoreWindowPosition()
     MainFrame:ClearAllPoints()
     MainFrame:SetPoint(
-        RPEmoteMenuDB.point,
+        settings.point,
         UIParent,
-        RPEmoteMenuDB.relativePoint,
-        RPEmoteMenuDB.x,
-        RPEmoteMenuDB.y
+        settings.relativePoint,
+        settings.x,
+        settings.y
     )
 
     -- Convert older saved CENTER or other anchors to the stable TOPLEFT anchor.
     SaveWindowPosition()
     MainFrame:ClearAllPoints()
     MainFrame:SetPoint(
-        RPEmoteMenuDB.point,
+        settings.point,
         UIParent,
-        RPEmoteMenuDB.relativePoint,
-        RPEmoteMenuDB.x,
-        RPEmoteMenuDB.y
+        settings.relativePoint,
+        settings.x,
+        settings.y
     )
 end
 
 local function SaveWindowSize()
     if not isWindowCollapsed then
         local x, y, width, height = ClampWindowGeometry(
-            RPEmoteMenuDB.x,
-            RPEmoteMenuDB.y,
+            settings.x,
+            settings.y,
             MainFrame:GetWidth(),
             MainFrame:GetHeight()
         )
 
-        RPEmoteMenuDB.x = x
-        RPEmoteMenuDB.y = y
-        RPEmoteMenuDB.width = width
-        RPEmoteMenuDB.height = height
+        settings.x = x
+        settings.y = y
+        settings.width = width
+        settings.height = height
     end
 
     RefreshGeneralWindowFields()
@@ -142,28 +144,28 @@ end
 
 local function RestoreWindowSize()
     local x, y, width, height = ClampWindowGeometry(
-        RPEmoteMenuDB.x,
-        RPEmoteMenuDB.y,
-        RPEmoteMenuDB.width,
-        RPEmoteMenuDB.height
+        settings.x,
+        settings.y,
+        settings.width,
+        settings.height
     )
 
-    RPEmoteMenuDB.x = x
-    RPEmoteMenuDB.y = y
-    RPEmoteMenuDB.width = width
-    RPEmoteMenuDB.height = height
+    settings.x = x
+    settings.y = y
+    settings.width = width
+    settings.height = height
     MainFrame:SetSize(width, height)
 
     RefreshGeneralWindowFields()
 end
 
 function MainWindow.ResetWindowPosition()
-    RPEmoteMenuDB.point = defaults.point
-    RPEmoteMenuDB.relativePoint = defaults.relativePoint
-    RPEmoteMenuDB.x = defaults.x
-    RPEmoteMenuDB.y = defaults.y
-    RPEmoteMenuDB.width = defaults.width
-    RPEmoteMenuDB.height = defaults.height
+    settings.point = defaults.point
+    settings.relativePoint = defaults.relativePoint
+    settings.x = defaults.x
+    settings.y = defaults.y
+    settings.width = defaults.width
+    settings.height = defaults.height
 
     RestoreWindowPosition()
 
@@ -177,7 +179,7 @@ function MainWindow.ResetWindowPosition()
 end
 
 function MainWindow.ApplyMovementLock()
-    local unlocked = not RPEmoteMenuDB.locked
+    local unlocked = not settings.locked
 
     MainFrame:SetMovable(unlocked)
     MainFrame:SetResizable(unlocked)
@@ -196,7 +198,7 @@ function MainWindow.ApplySettingsGearVisibility()
         return
     end
 
-    if RPEmoteMenuDB.hideSettingsGear then
+    if settings.hideSettingsGear then
         SettingsBtn:Hide()
     else
         SettingsBtn:Show()
@@ -223,8 +225,7 @@ local function GetContainerButton()
 end
 
 local function GetCurrentCategory(categoryIndex)
-    local categories = RPEmoteMenuDB and RPEmoteMenuDB.categories
-    return categories and categories[categoryIndex] or nil
+    return Database.GetCategory(categoryIndex)
 end
 
 local function IsCategoryVisible(categoryIndex)
@@ -432,7 +433,7 @@ local function UpdateWindowCollapse()
         MainFrame:SetHeight(collapsedHeight)
         CollapseBtn:SetText("+")
     else
-        MainFrame:SetSize(RPEmoteMenuDB.width, RPEmoteMenuDB.height)
+        MainFrame:SetSize(settings.width, settings.height)
         PreviousCategoryTab:Show()
         CurrentCategoryTab:Show()
         NextCategoryTab:Show()
@@ -444,13 +445,14 @@ local function UpdateWindowCollapse()
 
     MainWindow.ApplyMovementLock()
 
-    if RPEmoteMenuDB.rememberMinimized then
-        RPEmoteMenuDB.minimized = isWindowCollapsed
+    if settings.rememberMinimized then
+        settings.minimized = isWindowCollapsed
     end
 end
 
 -- MAIN WINDOW
 function MainWindow.CreateMainWindow()
+    settings = Database.GetSettings()
     MainFrame = CreateFrame("Frame", "RPEmoteMenu", UIParent, "BackdropTemplate")
     MainFrame:SetSize(defaults.width, defaults.height)
     MainFrame:SetResizeBounds(minimumWidth, minimumHeight, maximumWidth, maximumHeight)
@@ -459,7 +461,7 @@ function MainWindow.CreateMainWindow()
     MainFrame:RegisterForDrag("LeftButton")
 
     MainFrame:SetScript("OnDragStart", function(self)
-        if not RPEmoteMenuDB.locked then
+        if not settings.locked then
             self:StartMoving()
         end
     end)
@@ -493,7 +495,7 @@ function MainWindow.CreateMainWindow()
 
     local title = MainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", 10, -10)
-    title:SetText("RP Emote Menu 1.5")
+    title:SetText("RP Emote Menu 1.6")
     title:SetTextColor(1, 1, 1, 1)
 
     local function CreateCategoryTab()
@@ -604,7 +606,7 @@ function MainWindow.CreateMainWindow()
     ResizeGrip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
     ResizeGrip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
     ResizeGrip:SetScript("OnMouseDown", function(_, button)
-        if button == "LeftButton" and not RPEmoteMenuDB.locked and not isWindowCollapsed then
+        if button == "LeftButton" and not settings.locked and not isWindowCollapsed then
             MainFrame:StartSizing("BOTTOMRIGHT")
         end
     end)
@@ -619,15 +621,15 @@ function MainWindow.CreateMainWindow()
     MainWindow.ApplyMovementLock()
     MainWindow.ApplySettingsGearVisibility()
 
-    if RPEmoteMenuDB.rememberMinimized then
-        isWindowCollapsed = RPEmoteMenuDB.minimized
+    if settings.rememberMinimized then
+        isWindowCollapsed = settings.minimized
     else
         isWindowCollapsed = false
     end
 
     UpdateWindowCollapse()
 
-    if RPEmoteMenuDB.showAtLogin then
+    if settings.showAtLogin then
         MainFrame:Show()
     else
         MainFrame:Hide()

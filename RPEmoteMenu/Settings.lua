@@ -5,6 +5,7 @@ addon.Settings = {}
 local AddonSettings = addon.Settings
 local MainWindow = addon.MainWindow
 local Database = addon.Database
+local settings
 local MAX_CATEGORIES = addon.MAX_CATEGORIES
 local MAX_EMOTES = addon.MAX_EMOTES
 local settingsCategory
@@ -57,7 +58,7 @@ local function CreateLabeledEditBox(
     editBox.fieldName = fieldName
 
     local function GetCurrentValue(self)
-        local category = RPEmoteMenuDB.categories[self.categoryIndex]
+        local category = Database.GetCategory(self.categoryIndex)
 
         if self.emoteIndex then
             return category.emotes[self.emoteIndex][self.fieldName] or ""
@@ -67,7 +68,7 @@ local function CreateLabeledEditBox(
     end
 
     local function SetCurrentValue(self, value)
-        local category = RPEmoteMenuDB.categories[self.categoryIndex]
+        local category = Database.GetCategory(self.categoryIndex)
 
         if self.emoteIndex then
             category.emotes[self.emoteIndex][self.fieldName] = value
@@ -153,7 +154,7 @@ local function CreateAboutPanel()
     details:SetWidth(620)
     details:SetJustifyH("LEFT")
     details:SetText(
-        "Version 1.5\n" ..
+        "Version 1.6\n" ..
         "Author    Brandon Blackmoor\n" ..
         "Category  Roleplay\n" ..
         "License   GPL-3.0\n\n" ..
@@ -245,28 +246,28 @@ local function CreateGeneralSettingsPanel()
     description:SetTextColor(0.8, 0.8, 0.8)
 
     CreateCheckbox(panel, "Lock window movement and resizing", -70,
-        function() return RPEmoteMenuDB.locked end,
+        function() return settings.locked end,
         function(value)
-            RPEmoteMenuDB.locked = value
+            settings.locked = value
             MainWindow.ApplyMovementLock()
         end)
 
     CreateCheckbox(panel, "Hide settings gear icon", -105,
-        function() return RPEmoteMenuDB.hideSettingsGear end,
+        function() return settings.hideSettingsGear end,
         function(value)
-            RPEmoteMenuDB.hideSettingsGear = value
+            settings.hideSettingsGear = value
             MainWindow.ApplySettingsGearVisibility()
         end)
 
     CreateCheckbox(panel, "Show the addon at login", -140,
-        function() return RPEmoteMenuDB.showAtLogin end,
-        function(value) RPEmoteMenuDB.showAtLogin = value end)
+        function() return settings.showAtLogin end,
+        function(value) settings.showAtLogin = value end)
 
     CreateCheckbox(panel, "Remember whether the main window was minimized", -175,
-        function() return RPEmoteMenuDB.rememberMinimized end,
+        function() return settings.rememberMinimized end,
         function(value)
-            RPEmoteMenuDB.rememberMinimized = value
-            RPEmoteMenuDB.minimized = value and MainWindow.IsCollapsed() or false
+            settings.rememberMinimized = value
+            settings.minimized = value and MainWindow.IsCollapsed() or false
         end)
 
     local positionLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -283,26 +284,26 @@ local function CreateGeneralSettingsPanel()
 
     local positionXBox = CreateIntegerEditBox(
         panel, 190, -216, 70,
-        function() return RPEmoteMenuDB.x end,
+        function() return settings.x end,
         function(value)
             MainWindow.ApplyWindowGeometry(
                 value,
-                RPEmoteMenuDB.y,
-                RPEmoteMenuDB.width,
-                RPEmoteMenuDB.height
+                settings.y,
+                settings.width,
+                settings.height
             )
         end
     )
 
     local positionYBox = CreateIntegerEditBox(
         panel, 270, -216, 70,
-        function() return RPEmoteMenuDB.y end,
+        function() return settings.y end,
         function(value)
             MainWindow.ApplyWindowGeometry(
-                RPEmoteMenuDB.x,
+                settings.x,
                 value,
-                RPEmoteMenuDB.width,
-                RPEmoteMenuDB.height
+                settings.width,
+                settings.height
             )
         end
     )
@@ -321,25 +322,25 @@ local function CreateGeneralSettingsPanel()
 
     local widthBox = CreateIntegerEditBox(
         panel, 190, -251, 70,
-        function() return RPEmoteMenuDB.width end,
+        function() return settings.width end,
         function(value)
             MainWindow.ApplyWindowGeometry(
-                RPEmoteMenuDB.x,
-                RPEmoteMenuDB.y,
+                settings.x,
+                settings.y,
                 value,
-                RPEmoteMenuDB.height
+                settings.height
             )
         end
     )
 
     local heightBox = CreateIntegerEditBox(
         panel, 270, -251, 70,
-        function() return RPEmoteMenuDB.height end,
+        function() return settings.height end,
         function(value)
             MainWindow.ApplyWindowGeometry(
-                RPEmoteMenuDB.x,
-                RPEmoteMenuDB.y,
-                RPEmoteMenuDB.width,
+                settings.x,
+                settings.y,
+                settings.width,
                 value
             )
         end
@@ -483,6 +484,7 @@ local function CreateCategorySettingsPanel(categoryIndex)
 end
 
 function AddonSettings.CreateSettingsPanel()
+    settings = Database.GetSettings()
     local aboutPanel = CreateAboutPanel()
     local generalPanel = CreateGeneralSettingsPanel()
     local categoryPanels = {}

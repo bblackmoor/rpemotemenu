@@ -7,6 +7,8 @@ local defaultSections = addon.DefaultSections
 local defaults = addon.DefaultSettings
 local MAX_CATEGORIES = addon.MAX_CATEGORIES
 local MAX_EMOTES = addon.MAX_EMOTES
+local SCHEMA_VERSION = 2
+local DEFAULT_PROFILE_NAME = "Default"
 
 local function CopyDefaultCategories()
     local categories = {}
@@ -91,6 +93,30 @@ local function CopyCategories(sourceCategories)
     return copy
 end
 
+local function CategoriesMatch(first, second)
+    for categoryIndex = 1, MAX_CATEGORIES do
+        local firstCategory = first[categoryIndex]
+        local secondCategory = second[categoryIndex]
+
+        if firstCategory.name ~= secondCategory.name then
+            return false
+        end
+
+        for emoteIndex = 1, MAX_EMOTES do
+            local firstEmote = firstCategory.emotes[emoteIndex]
+            local secondEmote = secondCategory.emotes[emoteIndex]
+
+            if firstEmote.label ~= secondEmote.label
+                or firstEmote.defaultCommand ~= secondEmote.defaultCommand
+                or firstEmote.targetedCommand ~= secondEmote.targetedCommand then
+                return false
+            end
+        end
+    end
+
+    return true
+end
+
 local legacyDefaultCategoryNames = {
     THOUGHTS = "Thoughts",
     REACTIONS = "Reactions",
@@ -113,6 +139,88 @@ local function MigrateLegacyCategoryNameCase(categories)
     end
 end
 
+function Database.GetSettings()
+    return RPEmoteMenuDB
+end
+
+function Database.GetCharacterKey()
+    local name, realm = UnitName("player")
+
+    if not name or name == "" then
+        return nil
+    end
+
+    if (not realm or realm == "") and GetRealmName then
+        realm = GetRealmName()
+    end
+
+    if realm and realm ~= "" then
+        return name .. "-" .. realm
+    end
+
+    return name
+end
+
+function Database.GetActiveProfileName()
+    local characterKey = Database.GetCharacterKey()
+    local profileName = characterKey and RPEmoteMenuDB.activeProfiles[characterKey]
+
+    if type(profileName) ~= "string" then
+        profileName = DEFAULT_PROFILE_NAME
+
+        if characterKey then
+            RPEmoteMenuDB.activeProfiles[characterKey] = profileName
+        end
+    end
+
+    if type(RPEmoteMenuDB.profiles[profileName]) ~= "table" then
+        profileName = DEFAULT_PROFILE_NAME
+
+        if characterKey then
+            RPEmoteMenuDB.activeProfiles[characterKey] = profileName
+        end
+    end
+
+    return profileName
+end
+
+function Database.GetActiveProfile()
+    return RPEmoteMenuDB.profiles[Database.GetActiveProfileName()]
+end
+
+function Database.GetCategories()
+    return Database.GetActiveProfile().categories
+end
+
+function Database.GetCategory(categoryIndex)
+    return Database.GetCategories()[categoryIndex]
+end
+
+local function PreserveCustomizedProfile(categories, characterKey)
+    local baseName = characterKey or "Migrated"
+    local profileName = baseName
+    local suffix = 2
+
+    while RPEmoteMenuDB.profiles[profileName] do
+        profileName = baseName .. " (" .. suffix .. ")"
+        suffix = suffix + 1
+    end
+
+    RPEmoteMenuDB.profiles[profileName] = {categories = categories}
+
+    for savedCharacterKey, activeProfileName in pairs(RPEmoteMenuDB.activeProfiles) do
+        if activeProfileName == DEFAULT_PROFILE_NAME then
+            RPEmoteMenuDB.activeProfiles[savedCharacterKey] = profileName
+        end
+    end
+
+    if characterKey and not RPEmoteMenuDB.activeProfiles[characterKey] then
+        RPEmoteMenuDB.activeProfiles[characterKey] = profileName
+    end
+
+    return profileName
+end
+
 function Database.InitializeDatabase()
     RPEmoteMenuDB = RPEmoteMenuDB or {}
 
@@ -122,42 +230,95 @@ function Database.InitializeDatabase()
         end
     end
 
-    -- The database has two separate emote tables:
+    -- The database stores supplied defaults separately from editable profiles:
     --
     -- defaultCategories:
     --     A stored copy of the values supplied with this addon version.
     --
-    -- categories:
-    --     The editable current values. Both the options fields and the main
-    --     addon window read from this table.
+    -- profiles[profileName].categories:
+    --     The editable categories belonging to each named profile.
     --
-    -- This migration fills BOTH tables with the current supplied values once.
-    -- Later user changes affect only categories and are preserved, including
-    -- deliberately blank fields.
-    if RPEmoteMenuDB.emoteDataVersion ~= defaults.emoteDataVersion then
-        local suppliedValues = CopyDefaultCategories()
+    -- activeProfiles[characterName-realmName]:
+    --     The profile currently associated with each character.
+    --
+    -- Default starts with the exact addon-supplied categories. Existing custom
+    -- categories are preserved in a separate active profile during migration.
+    local suppliedValues = CopyDefaultCategories()
+    local defaultsChanged = RPEmoteMenuDB.emoteDataVersion ~= defaults.emoteDataVersion
 
-        -- Refresh the reset source when the supplied defaults change, but
-        -- preserve any existing user-edited categories.
+    if defaultsChanged then
         RPEmoteMenuDB.defaultCategories = CopyCategories(suppliedValues)
-
-        if RPEmoteMenuDB.categories then
-            MigrateLegacyCategoryNameCase(RPEmoteMenuDB.categories)
-        end
-
-        RPEmoteMenuDB.categories = NormalizeCategories(
-            RPEmoteMenuDB.categories or CopyCategories(suppliedValues)
-        )
         RPEmoteMenuDB.emoteDataVersion = defaults.emoteDataVersion
     else
         RPEmoteMenuDB.defaultCategories = NormalizeCategories(
-            RPEmoteMenuDB.defaultCategories or CopyDefaultCategories()
+            RPEmoteMenuDB.defaultCategories or CopyCategories(suppliedValues)
         )
+    end
 
-        RPEmoteMenuDB.categories = NormalizeCategories(
-            RPEmoteMenuDB.categories
-                or CopyCategories(RPEmoteMenuDB.defaultCategories)
-        )
+    if type(RPEmoteMenuDB.profiles) ~= "table" then
+        RPEmoteMenuDB.profiles = {}
+    end
+
+    if type(RPEmoteMenuDB.activeProfiles) ~= "table" then
+        RPEmoteMenuDB.activeProfiles = {}
+    end
+
+    local defaultProfile = RPEmoteMenuDB.profiles[DEFAULT_PROFILE_NAME]
+    if type(defaultProfile) ~= "table" then
+        defaultProfile = {}
+        RPEmoteMenuDB.profiles[DEFAULT_PROFILE_NAME] = defaultProfile
+    end
+
+    if type(RPEmoteMenuDB.schemaVersion) ~= "number"
+        or RPEmoteMenuDB.schemaVersion < SCHEMA_VERSION then
+        local previousCategories = type(RPEmoteMenuDB.categories) == "table"
+            and RPEmoteMenuDB.categories
+            or defaultProfile.categories
+
+        if type(previousCategories) == "table" then
+            previousCategories = NormalizeCategories(previousCategories)
+
+            if defaultsChanged then
+                MigrateLegacyCategoryNameCase(previousCategories)
+            end
+
+            if not CategoriesMatch(previousCategories, suppliedValues) then
+                PreserveCustomizedProfile(
+                    previousCategories,
+                    Database.GetCharacterKey()
+                )
+            end
+        end
+
+        defaultProfile.categories = CopyCategories(suppliedValues)
+        RPEmoteMenuDB.categories = nil
+        RPEmoteMenuDB.schemaVersion = SCHEMA_VERSION
+    end
+
+    defaultProfile.categories = NormalizeCategories(
+        defaultProfile.categories or CopyCategories(RPEmoteMenuDB.defaultCategories)
+    )
+
+    for _, profile in pairs(RPEmoteMenuDB.profiles) do
+        if type(profile) == "table" then
+            if defaultsChanged then
+                MigrateLegacyCategoryNameCase(profile.categories)
+            end
+
+            profile.categories = NormalizeCategories(
+                profile.categories or CopyCategories(RPEmoteMenuDB.defaultCategories)
+            )
+        end
+    end
+
+    local characterKey = Database.GetCharacterKey()
+    if characterKey then
+        local profileName = RPEmoteMenuDB.activeProfiles[characterKey]
+
+        if type(profileName) ~= "string"
+            or type(RPEmoteMenuDB.profiles[profileName]) ~= "table" then
+            RPEmoteMenuDB.activeProfiles[characterKey] = DEFAULT_PROFILE_NAME
+        end
     end
 end
 
@@ -166,15 +327,17 @@ function Database.ResetCategoryToDefaults(categoryIndex)
     local suppliedDefaults = CopyDefaultCategories()
     local defaultCategory = suppliedDefaults[categoryIndex]
 
+    local categories = Database.GetCategories()
+
     RPEmoteMenuDB.defaultCategories[categoryIndex] = CopyCategories(suppliedDefaults)[categoryIndex]
-    RPEmoteMenuDB.categories[categoryIndex] = {
+    categories[categoryIndex] = {
         name = defaultCategory.name,
         emotes = {}
     }
 
     for emoteIndex = 1, MAX_EMOTES do
         local sourceEmote = defaultCategory.emotes[emoteIndex]
-        RPEmoteMenuDB.categories[categoryIndex].emotes[emoteIndex] = {
+        categories[categoryIndex].emotes[emoteIndex] = {
             label = sourceEmote.label,
             defaultCommand = sourceEmote.defaultCommand,
             targetedCommand = sourceEmote.targetedCommand
@@ -192,7 +355,7 @@ function Database.ResetAllCategoriesToDefaults()
     local suppliedDefaults = CopyDefaultCategories()
 
     RPEmoteMenuDB.defaultCategories = CopyCategories(suppliedDefaults)
-    RPEmoteMenuDB.categories = CopyCategories(suppliedDefaults)
+    Database.GetActiveProfile().categories = CopyCategories(suppliedDefaults)
 
     if addon.Settings.RefreshEditors then
         addon.Settings.RefreshEditors()

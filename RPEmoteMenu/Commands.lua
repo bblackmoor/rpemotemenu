@@ -28,7 +28,8 @@ local function ReplaceCommandTokens(command)
     }
 
     for token, value in pairs(replacements) do
-        command = string.gsub(command, token, function()
+        local pattern = string.gsub(token, "(%W)", "%%%1")
+        command = string.gsub(command, pattern, function()
             return value
         end)
     end
