@@ -1,12 +1,14 @@
 # RP Emote Menu
 
-A lightweight, configurable roleplaying emote menu for **World of Warcraft**.
+## The Short Version
 
-RP Emote Menu provides a compact, movable, resizable, and collapsible window
-with quick access to your favorite roleplaying emotes and custom `/e` commands.
-Choose a category from the left sidebar, then select an emote from the list on
-the right. Each emote can optionally use a different command when another unit
-is targeted.
+A customizable emote menu for **World of Warcraft** roleplayers.
+
+- **Emotes:** Up to 100 across 10 categories, with optional targeted commands and `{target}` / `{player}` tokens.
+- **Profiles:** Create, copy, rename, and share profiles between characters. The Default profile is protected.
+- **Import/export:** Share individual categories or complete profiles as JSON.
+- **Interface:** Movable, resizable, collapsible window with a category sidebar.
+- **Commands:** `/rpem` toggles the menu; `/rpem config` opens settings.
 
 ## Features
 
