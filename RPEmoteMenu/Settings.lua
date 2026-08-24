@@ -706,19 +706,19 @@ local function CreateProfilesSettingsPanel()
     selector:SetDefaultText(Database.GetActiveProfileName())
 
     local nameLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    nameLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -150)
+    nameLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -175)
     nameLabel:SetText("New profile name")
 
     local nameInput = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
     nameInput:SetSize(290, 24)
-    nameInput:SetPoint("TOPLEFT", panel, "TOPLEFT", 26, -172)
+    nameInput:SetPoint("TOPLEFT", panel, "TOPLEFT", 26, -197)
     nameInput:SetAutoFocus(false)
     nameInput:SetMaxLetters(64)
     nameInput:SetFont(STANDARD_TEXT_FONT, 12, "")
     nameInput:SetTextColor(1, 1, 1, 1)
 
     local status = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    status:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -248)
+    status:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -273)
     status:SetWidth(620)
     status:SetJustifyH("LEFT")
 
@@ -751,6 +751,25 @@ local function CreateProfilesSettingsPanel()
         end
     end
 
+    StaticPopupDialogs["RPEMOTEMENU_DELETE_PROFILE"] = {
+        text = 'Delete the profile "%s"?\n\nCharacters using it will return to Default.',
+        button1 = DELETE or "Delete",
+        button2 = CANCEL or "Cancel",
+        OnAccept = function(_, profileName)
+            local success, errorMessage = Database.DeleteProfile(profileName)
+
+            if success then
+                SetStatus("Deleted profile " .. profileName .. ".")
+            else
+                SetStatus(errorMessage, true)
+            end
+        end,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+        preferredIndex = 3
+    }
+
     local function BuildProfileMenu(_, rootDescription)
         for _, profileName in ipairs(Database.GetProfileNames()) do
             rootDescription:CreateRadio(
@@ -775,7 +794,7 @@ local function CreateProfilesSettingsPanel()
 
     createButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     createButton:SetSize(125, 24)
-    createButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -210)
+    createButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -235)
     createButton:SetText("Create Profile")
     createButton:SetScript("OnClick", function()
         local success, result = Database.CreateProfile(nameInput:GetText())
@@ -810,7 +829,7 @@ local function CreateProfilesSettingsPanel()
 
     renameButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     renameButton:SetSize(125, 24)
-    renameButton:SetPoint("LEFT", copyButton, "RIGHT", 8, 0)
+    renameButton:SetPoint("TOPLEFT", selector, "BOTTOMLEFT", 0, -8)
     renameButton:SetText("Rename Profile")
     renameButton:SetScript("OnClick", function()
         local success, result = Database.RenameProfile(
@@ -833,13 +852,12 @@ local function CreateProfilesSettingsPanel()
     deleteButton:SetText("Delete Profile")
     deleteButton:SetScript("OnClick", function()
         local profileName = Database.GetActiveProfileName()
-        local success, errorMessage = Database.DeleteProfile(profileName)
 
-        if success then
-            SetStatus("Deleted profile " .. profileName .. ".")
-        else
-            SetStatus(errorMessage, true)
+        if not Database.CanEditActiveProfile() then
+            return
         end
+
+        StaticPopup_Show("RPEMOTEMENU_DELETE_PROFILE", profileName, nil, profileName)
     end)
 
     exportProfileButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
