@@ -750,6 +750,14 @@ local function CreateProfilesSettingsPanel()
         end
     end
 
+    local function GetPopupEditBox(popup)
+        return popup.GetEditBox and popup:GetEditBox() or popup.editBox
+    end
+
+    local function GetPopupButton1(popup)
+        return popup.GetButton1 and popup:GetButton1() or popup.button1
+    end
+
     StaticPopupDialogs["RPEMOTEMENU_RENAME_PROFILE"] = {
         text = 'Rename the profile "%s".',
         button1 = "Rename",
@@ -758,15 +766,17 @@ local function CreateProfilesSettingsPanel()
         maxLetters = 64,
         editBoxWidth = 260,
         OnShow = function(self, profileName)
-            self.editBox:SetText(profileName or self.data)
-            self.editBox:HighlightText()
-            self.editBox:SetFocus()
-            self.button1:SetEnabled(false)
+            local editBox = GetPopupEditBox(self)
+
+            editBox:SetText(profileName or self.data)
+            editBox:HighlightText()
+            editBox:SetFocus()
+            GetPopupButton1(self):SetEnabled(false)
         end,
         OnAccept = function(self, profileName)
             local success, result = Database.RenameProfile(
                 profileName,
-                self.editBox:GetText()
+                GetPopupEditBox(self):GetText()
             )
 
             if success then
@@ -782,13 +792,14 @@ local function CreateProfilesSettingsPanel()
                 popup.data
             )
 
-            popup.button1:SetEnabled(validName ~= nil)
+            GetPopupButton1(popup):SetEnabled(validName ~= nil)
         end,
         EditBoxOnEnterPressed = function(self)
             local popup = self:GetParent()
+            local acceptButton = GetPopupButton1(popup)
 
-            if popup.button1:IsEnabled() then
-                popup.button1:Click()
+            if acceptButton:IsEnabled() then
+                acceptButton:Click()
             end
         end,
         EditBoxOnEscapePressed = function(self)
