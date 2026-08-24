@@ -357,3 +357,23 @@ function Serialization.ImportProfile(text)
 
     return true, imported.name
 end
+
+function Serialization.ImportProfileAsNew(profileName, text)
+    local validName, errorMessage = Database.ValidateNewProfileName(profileName)
+    if not validName then
+        return false, errorMessage
+    end
+
+    local imported
+    imported, errorMessage = Serialization.Decode(text, "profile")
+    if not imported then
+        return false, errorMessage
+    end
+
+    local success, createdName = Database.CreateProfile(validName, imported.categories)
+    if not success then
+        return false, createdName
+    end
+
+    return true, createdName, imported.name
+end

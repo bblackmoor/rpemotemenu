@@ -222,6 +222,10 @@ local function ValidateNewProfileName(profileName, existingProfileName)
     return profileName
 end
 
+function Database.ValidateNewProfileName(profileName)
+    return ValidateNewProfileName(profileName)
+end
+
 local function RefreshProfileViews()
     if addon.MainWindow and addon.MainWindow.SetSelectedCategory then
         addon.MainWindow.SetSelectedCategory(1)
@@ -285,7 +289,7 @@ function Database.SetActiveProfile(profileName)
     return true
 end
 
-function Database.CreateProfile(profileName)
+function Database.CreateProfile(profileName, sourceCategories)
     local validName, errorMessage = ValidateNewProfileName(profileName)
     if not validName then
         return false, errorMessage
@@ -297,7 +301,9 @@ function Database.CreateProfile(profileName)
     end
 
     RPEmoteMenuDB.profiles[validName] = {
-        categories = CopyDefaultCategories()
+        categories = type(sourceCategories) == "table"
+            and CopyCategories(sourceCategories)
+            or CopyDefaultCategories()
     }
     RPEmoteMenuDB.activeProfiles[characterKey] = validName
 
