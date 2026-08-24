@@ -562,7 +562,7 @@ function MainWindow.CreateMainWindow()
         button.Selection:SetColorTexture(0.3, 0.25, 0.12, 0.85)
         button.Selection:Hide()
 
-        button.Text = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        button.Text = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         button.Text:SetPoint("LEFT", button, "LEFT", 6, 0)
         button.Text:SetPoint("RIGHT", button, "RIGHT", -5, 0)
         button.Text:SetJustifyH("LEFT")

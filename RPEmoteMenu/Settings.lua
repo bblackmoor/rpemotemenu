@@ -457,7 +457,11 @@ local function CreateAboutPanel()
     description:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -12)
     description:SetWidth(620)
     description:SetJustifyH("LEFT")
-    description:SetText("A configurable, collapsible quick-emote menu for roleplaying. Create up to ten categories with ten emotes in each category, including optional target-specific commands.")
+    description:SetText(
+        "A configurable roleplaying emote menu with a category sidebar, " ..
+        "character-selected profiles, and JSON import/export. Organize up to " ..
+        "ten categories with ten emotes each, including optional targeted commands."
+    )
 
     local details = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     details:SetPoint("TOPLEFT", description, "BOTTOMLEFT", 0, -24)
@@ -468,6 +472,21 @@ local function CreateAboutPanel()
         "Author    Brandon Blackmoor\n" ..
         "Category  Roleplay\n" ..
         "License   GPL-3.0\n\n" ..
+
+        "Categories and emotes\n" ..
+        "    Choose a named category from the left sidebar.\n" ..
+        "    Each category supports up to ten emotes.\n" ..
+        "    A targeted command is used only for another target.\n\n" ..
+
+        "Profiles\n" ..
+        "    Each character chooses its own active profile.\n" ..
+        "    Profiles can be created, copied, renamed, or deleted.\n" ..
+        "    The Default profile is always read-only.\n\n" ..
+
+        "Import and export\n" ..
+        "    Share individual categories or complete profiles as JSON.\n" ..
+        "    Category import replaces the selected category.\n" ..
+        "    Profile import always creates a new named profile.\n\n" ..
 
         "Slash Commands\n" ..
         "    /rpem - Show or hide the RP Emote Menu.\n" ..
@@ -550,7 +569,7 @@ local function CreateGeneralSettingsPanel()
 
     local description = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     description:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -8)
-    description:SetText("Configure the RP Emote Menu window.")
+    description:SetText("Configure window visibility, movement, resizing, and login behavior.")
     description:SetTextColor(0.8, 0.8, 0.8)
 
     CreateCheckbox(panel, "Lock window movement and resizing", -70,
@@ -691,8 +710,8 @@ local function CreateProfilesSettingsPanel()
     description:SetWidth(620)
     description:SetJustifyH("LEFT")
     description:SetText(
-        "Choose a profile for this character, or create an editable copy of the defaults. " ..
-        "The Default profile cannot be edited, renamed, or deleted."
+        "Choose a profile for this character, create or copy an editable profile, " ..
+        "or import a new one. The Default profile cannot be edited, renamed, or deleted."
     )
     description:SetTextColor(0.8, 0.8, 0.8)
 
@@ -1008,10 +1027,11 @@ local function CreateCategorySettingsPanel(categoryIndex)
     placeholderText:SetWidth(630)
     placeholderText:SetJustifyH("LEFT")
     placeholderText:SetText(
+        "Named categories appear in the sidebar; blank categories stay hidden.\n" ..
         "{target} - Target's name without the realm.\n" ..
         "{player} - Your character's name without the realm.\n" ..
-        "Targeted Command is used only when another unit is targeted.\n\n" ..
-        "The Default profile cannot be edited."
+        "Targeted Command is used only when another unit is targeted.\n" ..
+        "Import replaces this category. The Default profile cannot be edited."
     )
     placeholderText:SetTextColor(0.8, 0.8, 0.8)
 
