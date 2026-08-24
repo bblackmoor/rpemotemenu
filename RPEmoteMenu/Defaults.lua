@@ -217,6 +217,7 @@ addon.DefaultSettings = {
     y = 100,
     width = 250,
     height = 250,
+    sidebarWidth = 112,
     categoryFont = "Friz Quadrata",
     emoteFont = "Friz Quadrata",
     categoryFontSize = 12,
@@ -241,3 +242,5 @@ addon.EmoteAliases = {
 
 addon.MAX_CATEGORIES = #addon.DefaultSections
 addon.MAX_EMOTES = 10
+addon.MIN_SIDEBAR_WIDTH = 60
+addon.MAX_SIDEBAR_WIDTH = 220

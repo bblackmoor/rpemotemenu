@@ -434,6 +434,13 @@ function Database.InitializeDatabase()
         RPEmoteMenuDB.selectedCategory = defaults.selectedCategory
     end
 
+    RPEmoteMenuDB.sidebarWidth = math.floor(ClampNumber(
+        RPEmoteMenuDB.sidebarWidth,
+        addon.MIN_SIDEBAR_WIDTH,
+        addon.MAX_SIDEBAR_WIDTH,
+        defaults.sidebarWidth
+    ))
+
     if strtrim(RPEmoteMenuDB.categoryFont) == "" then
         RPEmoteMenuDB.categoryFont = defaults.categoryFont
     end

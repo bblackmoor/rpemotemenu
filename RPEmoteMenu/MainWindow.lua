@@ -19,7 +19,10 @@ local minimumWidth = 250
 local minimumHeight = 150
 local maximumWidth = 400
 local maximumHeight = 400
-local sidebarWidth = 112
+local sidebarWidth = defaults.sidebarWidth
+local minimumSidebarWidth = addon.MIN_SIDEBAR_WIDTH
+local maximumSidebarWidth = addon.MAX_SIDEBAR_WIDTH
+local minimumEmoteColumnWidth = 45
 local categoryButtonHeight = 24
 local emoteButtonHeight = 20
 
@@ -50,6 +53,16 @@ local function RefreshGeneralWindowFields()
     if addon.Settings and addon.Settings.RefreshGeneralWindowFields then
         addon.Settings.RefreshGeneralWindowFields()
     end
+end
+
+local function GetMaximumSidebarWidth(windowWidth)
+    return math.max(
+        minimumSidebarWidth,
+        math.min(
+            maximumSidebarWidth,
+            math.floor(windowWidth) - 35 - minimumEmoteColumnWidth
+        )
+    )
 end
 
 local function ClampWindowGeometry(x, y, width, height)
@@ -178,6 +191,9 @@ function MainWindow.ResetWindowPosition()
     settings.y = defaults.y
     settings.width = defaults.width
     settings.height = defaults.height
+    settings.sidebarWidth = defaults.sidebarWidth
+
+    MainWindow.ApplySidebarWidth(defaults.sidebarWidth)
 
     RestoreWindowPosition()
 
@@ -187,6 +203,41 @@ function MainWindow.ResetWindowPosition()
         RestoreWindowSize()
     end
 
+    RefreshGeneralWindowFields()
+end
+
+function MainWindow.ApplySidebarWidth(width)
+    if not MainFrame or not CategorySidebar or not CategoryScrollChild
+        or not ScrollFrame or not ScrollChild then
+        return
+    end
+
+    local requestedWidth = math.floor(tonumber(width) or defaults.sidebarWidth)
+    sidebarWidth = math.max(
+        minimumSidebarWidth,
+        math.min(GetMaximumSidebarWidth(MainFrame:GetWidth()), requestedWidth)
+    )
+    settings.sidebarWidth = sidebarWidth
+
+    CategorySidebar:SetWidth(sidebarWidth)
+    CategoryScrollChild:SetWidth(sidebarWidth - 7)
+
+    for _, button in ipairs(categoryButtons) do
+        button:SetWidth(sidebarWidth - 7)
+    end
+
+    ScrollFrame:ClearAllPoints()
+    ScrollFrame:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", sidebarWidth + 10, -40)
+    ScrollFrame:SetPoint("BOTTOMRIGHT", MainFrame, "BOTTOMRIGHT", -25, 10)
+
+    local contentWidth = math.max(MainFrame:GetWidth() - sidebarWidth - 35, 1)
+    ScrollChild:SetWidth(contentWidth)
+
+    for _, button in ipairs(buttonsPool) do
+        button:SetWidth(math.max(contentWidth - 5, 1))
+    end
+
+    MainWindow.UpdateMenu()
     RefreshGeneralWindowFields()
 end
 
@@ -674,6 +725,7 @@ end
 function MainWindow.CreateMainWindow()
     settings = Database.GetSettings()
     selectedCategoryIndex = settings.selectedCategory
+    sidebarWidth = settings.sidebarWidth
     MainFrame = CreateFrame("Frame", "RPEmoteMenu", UIParent, "BackdropTemplate")
     MainFrame:SetSize(defaults.width, defaults.height)
     MainFrame:SetResizeBounds(minimumWidth, minimumHeight, maximumWidth, maximumHeight)
@@ -693,6 +745,12 @@ function MainWindow.CreateMainWindow()
     end)
 
     MainFrame:SetScript("OnSizeChanged", function(self, width)
+        if CategorySidebar and ScrollFrame and ScrollChild
+            and sidebarWidth > GetMaximumSidebarWidth(width) then
+            MainWindow.ApplySidebarWidth(sidebarWidth)
+            return
+        end
+
         local contentWidth = math.max(width - sidebarWidth - 35, 1)
 
         if ScrollChild then
@@ -882,6 +940,7 @@ function MainWindow.CreateMainWindow()
     -- Restore size first so legacy non-TOPLEFT anchors can be converted accurately.
     RestoreWindowSize()
     RestoreWindowPosition()
+    MainWindow.ApplySidebarWidth(settings.sidebarWidth)
     MainWindow.ApplyMovementLock()
     MainWindow.ApplySettingsGearVisibility()
     MainWindow.ApplyAppearance()

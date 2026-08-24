@@ -856,7 +856,7 @@ local function CreateAppearanceSettingsPanel()
     fontLoadingNote:SetWidth(620)
     fontLoadingNote:SetJustifyH("LEFT")
     fontLoadingNote:SetText(
-        "Custom fonts may take a few seconds to appear the first time they are selected."
+        "Custom fonts may take |cffffff0010 to 30 seconds|r to appear the first time they are selected."
     )
     fontLoadingNote:SetTextColor(0.7, 0.7, 0.7)
 
@@ -1172,19 +1172,38 @@ local function CreateGeneralSettingsPanel()
         end
     )
 
+    local sidebarWidthLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    sidebarWidthLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -290)
+    sidebarWidthLabel:SetText("Left column width")
+
+    local sidebarWidthBox = CreateIntegerEditBox(
+        panel, 190, -286, 70,
+        function() return settings.sidebarWidth end,
+        MainWindow.ApplySidebarWidth
+    )
+
+    local sidebarWidthSuffix = panel:CreateFontString(
+        nil,
+        "OVERLAY",
+        "GameFontHighlightSmall"
+    )
+    sidebarWidthSuffix:SetPoint("LEFT", sidebarWidthBox, "RIGHT", 6, 0)
+    sidebarWidthSuffix:SetText("px")
+
     AddonSettings.RefreshGeneralWindowFields = function()
         positionXBox:RefreshValue()
         positionYBox:RefreshValue()
         widthBox:RefreshValue()
         heightBox:RefreshValue()
+        sidebarWidthBox:RefreshValue()
     end
 
     panel:SetScript("OnShow", AddonSettings.RefreshGeneralWindowFields)
 
     local resetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    resetButton:SetSize(230, 24)
-    resetButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -300)
-    resetButton:SetText("Reset Window Position and Size")
+    resetButton:SetSize(290, 24)
+    resetButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -335)
+    resetButton:SetText("Reset Window Position, Size, and Column")
     resetButton:SetScript("OnClick", MainWindow.ResetWindowPosition)
 
     resetAllCategoriesButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
