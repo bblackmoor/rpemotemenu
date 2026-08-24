@@ -2,7 +2,7 @@
 ## Title: RP Emote Menu
 ## Notes: Collapsible, scrollable RP quick emote menu.
 ## Author: Brandon Blackmoor <bblackmoor@blackgate.net>
-## Version: 1.4
+## Version: 1.5
 ## IconTexture: Interface\AddOns\RPEmoteMenu\Media\icon
 ## SavedVariables: RPEmoteMenuDB
 
@@ -21,4 +21,9 @@
 ## X-License: GPL-3.0
 ## X-Website: https://github.com/bblackmoor/rpemotemenu/
 
-RPEmoteMenu.lua
+Defaults.lua
+Database.lua
+Commands.lua
+MainWindow.lua
+Settings.lua
+Core.lua
