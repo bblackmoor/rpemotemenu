@@ -530,7 +530,7 @@ local function CreateAboutPanel()
     end)
 
     local information = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    information:SetPoint("TOPLEFT", sourceLabel, "BOTTOMLEFT", 0, -14)
+    information:SetPoint("TOPLEFT", sourceLabel, "BOTTOMLEFT", 0, -2)
     information:SetWidth(620)
     information:SetJustifyH("LEFT")
     information:SetText(
