@@ -193,16 +193,16 @@ function MainWindow.ResetWindowPosition()
     settings.height = defaults.height
     settings.sidebarWidth = defaults.sidebarWidth
 
-    MainWindow.ApplySidebarWidth(defaults.sidebarWidth)
-
+    -- Resolve the default CENTER anchor using the restored full-size window.
+    -- Otherwise its previous dimensions shift the position until a second reset.
+    MainFrame:SetSize(defaults.width, defaults.height)
     RestoreWindowPosition()
 
     if isWindowCollapsed then
-        MainFrame:SetSize(defaults.width, collapsedHeight)
-    else
-        RestoreWindowSize()
+        MainFrame:SetHeight(collapsedHeight)
     end
 
+    MainWindow.ApplySidebarWidth(defaults.sidebarWidth)
     RefreshGeneralWindowFields()
 end
 
