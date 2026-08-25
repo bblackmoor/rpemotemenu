@@ -11,6 +11,18 @@ A customizable emote menu for **World of Warcraft** roleplayers.
 - **Window:** Move, resize, minimize, or lock the menu.
 - **Commands:** `/rpem` toggles the menu; `/rpem config` opens settings.
 
+## Screenshots
+
+<img width="263" height="220" hspace="2" vspace="2" alt="image" src="https://github.com/user-attachments/assets/1254befc-aff1-4d43-9d79-637b11d78cc6" />
+
+<img width="274" height="274" hspace="2" vspace="2" alt="image" src="https://github.com/user-attachments/assets/f47248c0-2155-4d4a-a525-ebdbba53701d" />
+
+<img width="298" height="318" hspace="2" vspace="2" alt="image" src="https://github.com/user-attachments/assets/6cd6da55-1187-41eb-99d0-a14bb8659515" />
+
+<img width="400" height="270" hspace="2" vspace="2" alt="image" src="https://github.com/user-attachments/assets/74ddee17-9166-462c-a1f6-b70c77e40b82" />
+
+<img width="400" height="270" hspace="2" vspace="2" alt="image" src="https://github.com/user-attachments/assets/7ca0d26d-5426-4716-b150-dbf3dc124c92" />
+
 ## Installation
 
 Place the `RPEmoteMenu` folder in your World of Warcraft addons directory:
