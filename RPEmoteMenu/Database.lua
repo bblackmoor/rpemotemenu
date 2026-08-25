@@ -10,6 +10,13 @@ local MAX_EMOTES = addon.MAX_EMOTES
 local SCHEMA_VERSION = 3
 local DEFAULT_PROFILE_NAME = "Default"
 local MAX_PROFILE_NAME_LENGTH = 64
+local VALID_CATEGORY_HIGHLIGHT_EFFECTS = {
+    background = true,
+    outline = true,
+    underline = true,
+    glow = true,
+    shadow = true
+}
 local VALID_BORDER_STYLES = {
     none = true,
     thin = true,
@@ -461,6 +468,12 @@ function Database.InitializeDatabase()
         24,
         defaults.emoteFontSize
     ))
+    RPEmoteMenuDB.categoryHighlightThickness = math.floor(ClampNumber(
+        RPEmoteMenuDB.categoryHighlightThickness,
+        1,
+        6,
+        defaults.categoryHighlightThickness
+    ))
     RPEmoteMenuDB.categoryTextColor = NormalizeColor(
         RPEmoteMenuDB.categoryTextColor,
         defaults.categoryTextColor
@@ -468,6 +481,10 @@ function Database.InitializeDatabase()
     RPEmoteMenuDB.emoteTextColor = NormalizeColor(
         RPEmoteMenuDB.emoteTextColor,
         defaults.emoteTextColor
+    )
+    RPEmoteMenuDB.categoryHighlightColor = NormalizeColor(
+        RPEmoteMenuDB.categoryHighlightColor,
+        defaults.categoryHighlightColor
     )
     RPEmoteMenuDB.backgroundColor = NormalizeColor(
         RPEmoteMenuDB.backgroundColor,
@@ -477,6 +494,10 @@ function Database.InitializeDatabase()
         RPEmoteMenuDB.borderColor,
         defaults.borderColor
     )
+
+    if not VALID_CATEGORY_HIGHLIGHT_EFFECTS[RPEmoteMenuDB.categoryHighlightEffect] then
+        RPEmoteMenuDB.categoryHighlightEffect = defaults.categoryHighlightEffect
+    end
 
     if not VALID_BORDER_STYLES[RPEmoteMenuDB.borderStyle] then
         RPEmoteMenuDB.borderStyle = defaults.borderStyle

@@ -659,6 +659,7 @@ local function CreateNumberSetting(
         end
     )
     editBox.settingKey = settingKey
+    editBox.Label = label
 
     if suffix then
         local suffixLabel = parent:CreateFontString(
@@ -668,6 +669,7 @@ local function CreateNumberSetting(
         )
         suffixLabel:SetPoint("LEFT", editBox, "RIGHT", 6, 0)
         suffixLabel:SetText(suffix)
+        editBox.SuffixLabel = suffixLabel
     end
 
     return editBox
@@ -874,10 +876,19 @@ local function CreateAppearanceSettingsPanel()
     )
 
     controls.emoteTextColor = CreateColorSetting(
-        panel, "Emote-label text", "emoteTextColor", 330, -218,
+        panel, "Emote-label text", "emoteTextColor", 230, -218,
         function() return settings.emoteTextColor end,
         function(value)
             settings.emoteTextColor = value
+            MainWindow.ApplyAppearance()
+        end
+    )
+
+    controls.categoryHighlightColor = CreateColorSetting(
+        panel, "Selected category", "categoryHighlightColor", 440, -218,
+        function() return settings.categoryHighlightColor end,
+        function(value)
+            settings.categoryHighlightColor = value
             MainWindow.ApplyAppearance()
         end
     )
@@ -892,13 +903,78 @@ local function CreateAppearanceSettingsPanel()
     )
 
     controls.borderColor = CreateColorSetting(
-        panel, "Border", "borderColor", 330, -273,
+        panel, "Border", "borderColor", 170, -273,
         function() return settings.borderColor end,
         function(value)
             settings.borderColor = value
             MainWindow.ApplyAppearance()
         end
     )
+
+    local highlightEffectLabel = panel:CreateFontString(
+        nil,
+        "OVERLAY",
+        "GameFontHighlight"
+    )
+    highlightEffectLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 320, -273)
+    highlightEffectLabel:SetText("Selection effect")
+
+    local highlightEffectSelector = CreateFrame(
+        "DropdownButton",
+        nil,
+        panel,
+        "WowStyle1DropdownTemplate"
+    )
+    highlightEffectSelector:SetWidth(190)
+    highlightEffectSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 320, -294)
+    highlightEffectSelector:SetDefaultText("Background")
+    highlightEffectSelector.settingKey = "categoryHighlightEffect"
+    controls.categoryHighlightEffect = highlightEffectSelector
+
+    controls.categoryHighlightThickness = CreateNumberSetting(
+        panel, "Thickness", "categoryHighlightThickness", 540, -273, 1, 6,
+        function() return settings.categoryHighlightThickness end,
+        function(value)
+            settings.categoryHighlightThickness = value
+            MainWindow.ApplyAppearance()
+        end,
+        "px"
+    )
+
+    local highlightEffectLabels = {
+        background = "Background",
+        outline = "Outline",
+        underline = "Underline",
+        glow = "Glow",
+        shadow = "Drop shadow"
+    }
+
+    local function RefreshHighlightControls()
+        local usesThickness = settings.categoryHighlightEffect == "outline"
+            or settings.categoryHighlightEffect == "underline"
+        local thicknessControl = controls.categoryHighlightThickness
+
+        thicknessControl:SetShown(usesThickness)
+        thicknessControl.Label:SetShown(usesThickness)
+        thicknessControl.SuffixLabel:SetShown(usesThickness)
+        highlightEffectSelector:OverrideText(
+            highlightEffectLabels[settings.categoryHighlightEffect]
+        )
+    end
+
+    highlightEffectSelector:SetupMenu(function(_, rootDescription)
+        for _, effect in ipairs({"background", "outline", "underline", "glow", "shadow"}) do
+            rootDescription:CreateRadio(
+                highlightEffectLabels[effect],
+                function() return settings.categoryHighlightEffect == effect end,
+                function()
+                    settings.categoryHighlightEffect = effect
+                    RefreshHighlightControls()
+                    MainWindow.ApplyAppearance()
+                end
+            )
+        end
+    end)
 
     local windowHeading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     windowHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -327)
@@ -1016,6 +1092,9 @@ local function CreateAppearanceSettingsPanel()
         "emoteFontSize",
         "categoryTextColor",
         "emoteTextColor",
+        "categoryHighlightColor",
+        "categoryHighlightEffect",
+        "categoryHighlightThickness",
         "backgroundColor",
         "borderColor",
         "borderStyle",
@@ -1033,6 +1112,7 @@ local function CreateAppearanceSettingsPanel()
             end
         end
 
+        RefreshHighlightControls()
         borderSelector:OverrideText(borderLabels[settings.borderStyle])
         fadeCheckbox:SetChecked(settings.fadeEnabled)
     end

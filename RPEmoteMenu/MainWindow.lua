@@ -523,6 +523,58 @@ local function GetVisibleEmotes(category)
     return visibleEmotes
 end
 
+function MainWindow.ApplyCategoryHighlight(button, isSelected)
+    button.Selection:Hide()
+    button.SelectionUnderline:Hide()
+    button.SelectionGlow:Hide()
+
+    for _, edge in pairs(button.SelectionOutline) do
+        edge:Hide()
+    end
+
+    button.Text:SetShadowColor(
+        button.defaultShadowR,
+        button.defaultShadowG,
+        button.defaultShadowB,
+        button.defaultShadowA
+    )
+    button.Text:SetShadowOffset(button.defaultShadowX, button.defaultShadowY)
+
+    if not isSelected then
+        return
+    end
+
+    local color = settings.categoryHighlightColor
+    local effect = settings.categoryHighlightEffect
+
+    if effect == "background" then
+        button.Selection:SetColorTexture(color.r, color.g, color.b, 0.85)
+        button.Selection:Show()
+    elseif effect == "outline" then
+        local thickness = settings.categoryHighlightThickness
+
+        button.SelectionOutline.top:SetHeight(thickness)
+        button.SelectionOutline.bottom:SetHeight(thickness)
+        button.SelectionOutline.left:SetWidth(thickness)
+        button.SelectionOutline.right:SetWidth(thickness)
+
+        for _, edge in pairs(button.SelectionOutline) do
+            edge:SetColorTexture(color.r, color.g, color.b, 1)
+            edge:Show()
+        end
+    elseif effect == "underline" then
+        button.SelectionUnderline:SetHeight(settings.categoryHighlightThickness)
+        button.SelectionUnderline:SetColorTexture(color.r, color.g, color.b, 1)
+        button.SelectionUnderline:Show()
+    elseif effect == "glow" then
+        button.SelectionGlow:SetVertexColor(color.r, color.g, color.b, 0.85)
+        button.SelectionGlow:Show()
+    elseif effect == "shadow" then
+        button.Text:SetShadowColor(color.r, color.g, color.b, 1)
+        button.Text:SetShadowOffset(2, -2)
+    end
+end
+
 local function UpdateCategorySidebar()
     if not CategoryScrollChild then
         return
@@ -545,11 +597,10 @@ local function UpdateCategorySidebar()
             )
             button.Text:SetText(category.name)
 
-            if categoryIndex == selectedCategoryIndex then
-                button.Selection:Show()
-            else
-                button.Selection:Hide()
-            end
+            MainWindow.ApplyCategoryHighlight(
+                button,
+                categoryIndex == selectedCategoryIndex
+            )
 
             button.Text:SetTextColor(
                 settings.categoryTextColor.r,
@@ -820,14 +871,67 @@ function MainWindow.CreateMainWindow()
 
         button.Selection = button:CreateTexture(nil, "BACKGROUND")
         button.Selection:SetAllPoints(button)
-        button.Selection:SetColorTexture(0.3, 0.25, 0.12, 0.85)
         button.Selection:Hide()
+
+        button.SelectionOutline = {
+            top = button:CreateTexture(nil, "ARTWORK"),
+            bottom = button:CreateTexture(nil, "ARTWORK"),
+            left = button:CreateTexture(nil, "ARTWORK"),
+            right = button:CreateTexture(nil, "ARTWORK")
+        }
+
+        button.SelectionOutline.top:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
+        button.SelectionOutline.top:SetPoint("TOPRIGHT", button, "TOPRIGHT", 0, 0)
+        button.SelectionOutline.bottom:SetPoint(
+            "BOTTOMLEFT",
+            button,
+            "BOTTOMLEFT",
+            0,
+            0
+        )
+        button.SelectionOutline.bottom:SetPoint(
+            "BOTTOMRIGHT",
+            button,
+            "BOTTOMRIGHT",
+            0,
+            0
+        )
+        button.SelectionOutline.left:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
+        button.SelectionOutline.left:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 0, 0)
+        button.SelectionOutline.right:SetPoint("TOPRIGHT", button, "TOPRIGHT", 0, 0)
+        button.SelectionOutline.right:SetPoint(
+            "BOTTOMRIGHT",
+            button,
+            "BOTTOMRIGHT",
+            0,
+            0
+        )
+
+        for _, edge in pairs(button.SelectionOutline) do
+            edge:Hide()
+        end
+
+        button.SelectionUnderline = button:CreateTexture(nil, "ARTWORK")
+        button.SelectionUnderline:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 0, 0)
+        button.SelectionUnderline:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 0, 0)
+        button.SelectionUnderline:Hide()
+
+        button.SelectionGlow = button:CreateTexture(nil, "ARTWORK")
+        button.SelectionGlow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+        button.SelectionGlow:SetAllPoints(button)
+        button.SelectionGlow:SetBlendMode("ADD")
+        button.SelectionGlow:Hide()
 
         button.Text = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         button.Text:SetPoint("LEFT", button, "LEFT", 6, 0)
         button.Text:SetPoint("RIGHT", button, "RIGHT", -5, 0)
         button.Text:SetJustifyH("LEFT")
         button.Text:SetWordWrap(false)
+        button.defaultShadowX, button.defaultShadowY = button.Text:GetShadowOffset()
+        button.defaultShadowR,
+            button.defaultShadowG,
+            button.defaultShadowB,
+            button.defaultShadowA = button.Text:GetShadowColor()
         ApplyFont(
             button.Text,
             settings.categoryFont,
