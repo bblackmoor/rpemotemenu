@@ -17,8 +17,8 @@ end
 local collapsedHeight = 30
 local minimumWidth = 250
 local minimumHeight = 150
-local maximumWidth = 400
-local maximumHeight = 400
+local maximumWidth = 600
+local maximumHeight = 600
 local sidebarWidth = defaults.sidebarWidth
 local minimumSidebarWidth = addon.MIN_SIDEBAR_WIDTH
 local maximumSidebarWidth = addon.MAX_SIDEBAR_WIDTH
