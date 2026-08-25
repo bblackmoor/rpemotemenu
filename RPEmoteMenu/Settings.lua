@@ -768,6 +768,7 @@ local function CreateFontSetting(parent, labelText, settingKey, x, y)
                     settings[settingKey] = fontName
                     selector:RefreshValue()
                     MainWindow.ApplyAppearance()
+                    MainWindow.RefreshFont(settingKey, fontName)
 
                     local isCustomFont = true
 
@@ -779,7 +780,9 @@ local function CreateFontSetting(parent, labelText, settingKey, x, y)
                     end
 
                     if isCustomFont then
-                        for _, delay in ipairs({0.25, 0.75, 1.5, 3}) do
+                        for _, delay in ipairs({
+                            0.25, 0.75, 1.5, 3, 5, 8, 12, 18, 24, 30
+                        }) do
                             C_Timer.After(delay, function()
                                 if selectionGeneration == currentGeneration then
                                     MainWindow.RefreshFont(settingKey, fontName)
@@ -875,8 +878,17 @@ local function CreateAppearanceSettingsPanel()
         end
     )
 
+    controls.selectedCategoryTextColor = CreateColorSetting(
+        panel, "Selected Category Text", "selectedCategoryTextColor", 220, -218,
+        function() return settings.selectedCategoryTextColor end,
+        function(value)
+            settings.selectedCategoryTextColor = value
+            MainWindow.ApplyAppearance()
+        end
+    )
+
     controls.emoteTextColor = CreateColorSetting(
-        panel, "Emote-label text", "emoteTextColor", 230, -218,
+        panel, "Emote-label text", "emoteTextColor", 440, -218,
         function() return settings.emoteTextColor end,
         function(value)
             settings.emoteTextColor = value
@@ -885,7 +897,11 @@ local function CreateAppearanceSettingsPanel()
     )
 
     controls.categoryHighlightColor = CreateColorSetting(
-        panel, "Selected category", "categoryHighlightColor", 440, -218,
+        panel,
+        "Selected Category Highlight",
+        "categoryHighlightColor",
+        20,
+        -273,
         function() return settings.categoryHighlightColor end,
         function(value)
             settings.categoryHighlightColor = value
@@ -894,7 +910,7 @@ local function CreateAppearanceSettingsPanel()
     )
 
     controls.backgroundColor = CreateColorSetting(
-        panel, "Background", "backgroundColor", 20, -273,
+        panel, "Background", "backgroundColor", 195, -273,
         function() return settings.backgroundColor end,
         function(value)
             settings.backgroundColor = value
@@ -903,7 +919,7 @@ local function CreateAppearanceSettingsPanel()
     )
 
     controls.borderColor = CreateColorSetting(
-        panel, "Border", "borderColor", 170, -273,
+        panel, "Border", "borderColor", 290, -273,
         function() return settings.borderColor end,
         function(value)
             settings.borderColor = value
@@ -916,7 +932,7 @@ local function CreateAppearanceSettingsPanel()
         "OVERLAY",
         "GameFontHighlight"
     )
-    highlightEffectLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 320, -273)
+    highlightEffectLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 360, -273)
     highlightEffectLabel:SetText("Selection effect")
 
     local highlightEffectSelector = CreateFrame(
@@ -925,14 +941,14 @@ local function CreateAppearanceSettingsPanel()
         panel,
         "WowStyle1DropdownTemplate"
     )
-    highlightEffectSelector:SetWidth(190)
-    highlightEffectSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 320, -294)
+    highlightEffectSelector:SetWidth(150)
+    highlightEffectSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 360, -294)
     highlightEffectSelector:SetDefaultText("Background")
     highlightEffectSelector.settingKey = "categoryHighlightEffect"
     controls.categoryHighlightEffect = highlightEffectSelector
 
     controls.categoryHighlightThickness = CreateNumberSetting(
-        panel, "Thickness", "categoryHighlightThickness", 540, -273, 1, 6,
+        panel, "Thickness", "categoryHighlightThickness", 530, -273, 1, 6,
         function() return settings.categoryHighlightThickness end,
         function(value)
             settings.categoryHighlightThickness = value
@@ -945,7 +961,6 @@ local function CreateAppearanceSettingsPanel()
         background = "Background",
         outline = "Outline",
         underline = "Underline",
-        glow = "Glow",
         shadow = "Drop shadow"
     }
 
@@ -963,7 +978,7 @@ local function CreateAppearanceSettingsPanel()
     end
 
     highlightEffectSelector:SetupMenu(function(_, rootDescription)
-        for _, effect in ipairs({"background", "outline", "underline", "glow", "shadow"}) do
+        for _, effect in ipairs({"background", "outline", "underline", "shadow"}) do
             rootDescription:CreateRadio(
                 highlightEffectLabels[effect],
                 function() return settings.categoryHighlightEffect == effect end,
@@ -1091,6 +1106,7 @@ local function CreateAppearanceSettingsPanel()
         "categoryFontSize",
         "emoteFontSize",
         "categoryTextColor",
+        "selectedCategoryTextColor",
         "emoteTextColor",
         "categoryHighlightColor",
         "categoryHighlightEffect",

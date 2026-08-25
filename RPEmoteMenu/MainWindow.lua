@@ -268,9 +268,14 @@ function MainWindow.ApplySettingsGearVisibility()
     end
 end
 
-local function ApplyFont(fontString, fontName, size, color)
-    local _, _, fontFlags = fontString:GetFont()
+local function ApplyFont(fontString, fontName, size, color, forceRefresh)
+    local _, currentSize, fontFlags = fontString:GetFont()
     local fontFile = addon.GetFontPath(fontName)
+
+    if forceRefresh and currentSize == size then
+        local refreshSize = size < 24 and size + 1 or size - 1
+        fontString:SetFont(fontFile, refreshSize, fontFlags or "")
+    end
 
     if not fontString:SetFont(fontFile, size, fontFlags or "") then
         fontString:SetFont(STANDARD_TEXT_FONT, size, fontFlags or "")
@@ -379,7 +384,14 @@ function MainWindow.RefreshFont(settingKey, fontName)
     end
 
     for _, button in ipairs(buttons) do
-        ApplyFont(button.Text, fontName, fontSize, textColor)
+        local buttonTextColor = textColor
+
+        if settingKey == "categoryFont"
+            and button.categoryIndex == selectedCategoryIndex then
+            buttonTextColor = settings.selectedCategoryTextColor
+        end
+
+        ApplyFont(button.Text, fontName, fontSize, buttonTextColor, true)
     end
 end
 
@@ -526,7 +538,6 @@ end
 function MainWindow.ApplyCategoryHighlight(button, isSelected)
     button.Selection:Hide()
     button.SelectionUnderline:Hide()
-    button.SelectionGlow:Hide()
 
     for _, edge in pairs(button.SelectionOutline) do
         edge:Hide()
@@ -566,9 +577,6 @@ function MainWindow.ApplyCategoryHighlight(button, isSelected)
         button.SelectionUnderline:SetHeight(settings.categoryHighlightThickness)
         button.SelectionUnderline:SetColorTexture(color.r, color.g, color.b, 1)
         button.SelectionUnderline:Show()
-    elseif effect == "glow" then
-        button.SelectionGlow:SetVertexColor(color.r, color.g, color.b, 0.85)
-        button.SelectionGlow:Show()
     elseif effect == "shadow" then
         button.Text:SetShadowColor(color.r, color.g, color.b, 1)
         button.Text:SetShadowOffset(2, -2)
@@ -597,15 +605,17 @@ local function UpdateCategorySidebar()
             )
             button.Text:SetText(category.name)
 
-            MainWindow.ApplyCategoryHighlight(
-                button,
-                categoryIndex == selectedCategoryIndex
-            )
+            local isSelected = categoryIndex == selectedCategoryIndex
+            MainWindow.ApplyCategoryHighlight(button, isSelected)
+
+            local textColor = isSelected
+                and settings.selectedCategoryTextColor
+                or settings.categoryTextColor
 
             button.Text:SetTextColor(
-                settings.categoryTextColor.r,
-                settings.categoryTextColor.g,
-                settings.categoryTextColor.b,
+                textColor.r,
+                textColor.g,
+                textColor.b,
                 1
             )
 
@@ -915,12 +925,6 @@ function MainWindow.CreateMainWindow()
         button.SelectionUnderline:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 0, 0)
         button.SelectionUnderline:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 0, 0)
         button.SelectionUnderline:Hide()
-
-        button.SelectionGlow = button:CreateTexture(nil, "ARTWORK")
-        button.SelectionGlow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
-        button.SelectionGlow:SetAllPoints(button)
-        button.SelectionGlow:SetBlendMode("ADD")
-        button.SelectionGlow:Hide()
 
         button.Text = button:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         button.Text:SetPoint("LEFT", button, "LEFT", 6, 0)

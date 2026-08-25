@@ -14,7 +14,6 @@ local VALID_CATEGORY_HIGHLIGHT_EFFECTS = {
     background = true,
     outline = true,
     underline = true,
-    glow = true,
     shadow = true
 }
 local VALID_BORDER_STYLES = {
@@ -477,6 +476,10 @@ function Database.InitializeDatabase()
     RPEmoteMenuDB.categoryTextColor = NormalizeColor(
         RPEmoteMenuDB.categoryTextColor,
         defaults.categoryTextColor
+    )
+    RPEmoteMenuDB.selectedCategoryTextColor = NormalizeColor(
+        RPEmoteMenuDB.selectedCategoryTextColor,
+        defaults.selectedCategoryTextColor
     )
     RPEmoteMenuDB.emoteTextColor = NormalizeColor(
         RPEmoteMenuDB.emoteTextColor,
