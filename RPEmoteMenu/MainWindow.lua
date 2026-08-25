@@ -271,17 +271,26 @@ end
 local function ApplyFont(fontString, fontName, size, color, forceRefresh)
     local _, currentSize, fontFlags = fontString:GetFont()
     local fontFile = addon.GetFontPath(fontName)
+    local currentText = forceRefresh and fontString:GetText()
 
     if forceRefresh and currentSize == size then
         local refreshSize = size < 24 and size + 1 or size - 1
         fontString:SetFont(fontFile, refreshSize, fontFlags or "")
     end
 
-    if not fontString:SetFont(fontFile, size, fontFlags or "") then
+    local applied = fontString:SetFont(fontFile, size, fontFlags or "")
+
+    if not applied then
         fontString:SetFont(STANDARD_TEXT_FONT, size, fontFlags or "")
     end
 
+    if forceRefresh and currentText then
+        fontString:SetText("")
+        fontString:SetText(currentText)
+    end
+
     fontString:SetTextColor(color.r, color.g, color.b, 1)
+    return applied
 end
 
 local function SetWindowOpacity(targetOpacity, duration)
@@ -364,7 +373,7 @@ end
 
 function MainWindow.RefreshFont(settingKey, fontName)
     if not MainFrame or settings[settingKey] ~= fontName then
-        return
+        return false
     end
 
     local buttons
@@ -380,8 +389,10 @@ function MainWindow.RefreshFont(settingKey, fontName)
         fontSize = settings.emoteFontSize
         textColor = settings.emoteTextColor
     else
-        return
+        return false
     end
+
+    local applied = true
 
     for _, button in ipairs(buttons) do
         local buttonTextColor = textColor
@@ -391,8 +402,12 @@ function MainWindow.RefreshFont(settingKey, fontName)
             buttonTextColor = settings.selectedCategoryTextColor
         end
 
-        ApplyFont(button.Text, fontName, fontSize, buttonTextColor, true)
+        if not ApplyFont(button.Text, fontName, fontSize, buttonTextColor, true) then
+            applied = false
+        end
     end
+
+    return applied
 end
 
 function MainWindow.ApplyAppearance()

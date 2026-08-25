@@ -751,7 +751,25 @@ local function CreateFontSetting(parent, labelText, settingKey, x, y)
     selector.settingKey = settingKey
 
     selector.RefreshValue = function(self)
-        self:OverrideText(settings[settingKey])
+        local fontName = settings[settingKey]
+        self:OverrideText(fontName)
+
+        local previewText = self.Text
+
+        if not previewText and type(self.GetFontString) == "function" then
+            previewText = self:GetFontString()
+        end
+
+        if previewText and type(previewText.SetFont) == "function" then
+            local _, previewSize, previewFlags = previewText:GetFont()
+            local fontPath = addon.GetFontPath(fontName)
+
+            if not previewText:SetFont(fontPath, previewSize or 12, previewFlags or "") then
+                previewText:SetFont(STANDARD_TEXT_FONT, previewSize or 12, previewFlags or "")
+            end
+
+            previewText:SetText(fontName)
+        end
     end
 
     selector:SetupMenu(function(_, rootDescription)
@@ -766,9 +784,20 @@ local function CreateFontSetting(parent, labelText, settingKey, x, y)
                     local currentGeneration = selectionGeneration
 
                     settings[settingKey] = fontName
-                    selector:RefreshValue()
-                    MainWindow.ApplyAppearance()
-                    MainWindow.RefreshFont(settingKey, fontName)
+
+                    local function RefreshSelection()
+                        if selectionGeneration ~= currentGeneration
+                            or settings[settingKey] ~= fontName then
+                            return
+                        end
+
+                        selector:RefreshValue()
+                        MainWindow.ApplyAppearance()
+                        MainWindow.RefreshFont(settingKey, fontName)
+                    end
+
+                    RefreshSelection()
+                    C_Timer.After(0, RefreshSelection)
 
                     local isCustomFont = true
 
@@ -785,6 +814,7 @@ local function CreateFontSetting(parent, labelText, settingKey, x, y)
                         }) do
                             C_Timer.After(delay, function()
                                 if selectionGeneration == currentGeneration then
+                                    selector:RefreshValue()
                                     MainWindow.RefreshFont(settingKey, fontName)
                                 end
                             end)
