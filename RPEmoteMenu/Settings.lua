@@ -867,7 +867,7 @@ local function CreateAppearanceSettingsPanel()
 
     local colorsHeading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     colorsHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -190)
-    colorsHeading:SetText("Colors")
+    colorsHeading:SetText("Text and Selection")
 
     controls.categoryTextColor = CreateColorSetting(
         panel, "Category text", "categoryTextColor", 20, -218,
@@ -879,7 +879,7 @@ local function CreateAppearanceSettingsPanel()
     )
 
     controls.selectedCategoryTextColor = CreateColorSetting(
-        panel, "Selected Category Text", "selectedCategoryTextColor", 220, -218,
+        panel, "Selected Category Text", "selectedCategoryTextColor", 230, -218,
         function() return settings.selectedCategoryTextColor end,
         function(value)
             settings.selectedCategoryTextColor = value
@@ -909,30 +909,12 @@ local function CreateAppearanceSettingsPanel()
         end
     )
 
-    controls.backgroundColor = CreateColorSetting(
-        panel, "Background", "backgroundColor", 195, -273,
-        function() return settings.backgroundColor end,
-        function(value)
-            settings.backgroundColor = value
-            MainWindow.ApplyAppearance()
-        end
-    )
-
-    controls.borderColor = CreateColorSetting(
-        panel, "Border", "borderColor", 290, -273,
-        function() return settings.borderColor end,
-        function(value)
-            settings.borderColor = value
-            MainWindow.ApplyAppearance()
-        end
-    )
-
     local highlightEffectLabel = panel:CreateFontString(
         nil,
         "OVERLAY",
         "GameFontHighlight"
     )
-    highlightEffectLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 360, -273)
+    highlightEffectLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 230, -273)
     highlightEffectLabel:SetText("Selection effect")
 
     local highlightEffectSelector = CreateFrame(
@@ -941,14 +923,14 @@ local function CreateAppearanceSettingsPanel()
         panel,
         "WowStyle1DropdownTemplate"
     )
-    highlightEffectSelector:SetWidth(150)
-    highlightEffectSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 360, -294)
+    highlightEffectSelector:SetWidth(190)
+    highlightEffectSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 230, -294)
     highlightEffectSelector:SetDefaultText("Background")
     highlightEffectSelector.settingKey = "categoryHighlightEffect"
     controls.categoryHighlightEffect = highlightEffectSelector
 
     controls.categoryHighlightThickness = CreateNumberSetting(
-        panel, "Thickness", "categoryHighlightThickness", 530, -273, 1, 6,
+        panel, "Thickness", "categoryHighlightThickness", 440, -273, 1, 6,
         function() return settings.categoryHighlightThickness end,
         function(value)
             settings.categoryHighlightThickness = value
@@ -995,8 +977,26 @@ local function CreateAppearanceSettingsPanel()
     windowHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -327)
     windowHeading:SetText("Window")
 
+    controls.backgroundColor = CreateColorSetting(
+        panel, "Background", "backgroundColor", 20, -357,
+        function() return settings.backgroundColor end,
+        function(value)
+            settings.backgroundColor = value
+            MainWindow.ApplyAppearance()
+        end
+    )
+
+    controls.borderColor = CreateColorSetting(
+        panel, "Border", "borderColor", 230, -357,
+        function() return settings.borderColor end,
+        function(value)
+            settings.borderColor = value
+            MainWindow.ApplyAppearance()
+        end
+    )
+
     local borderLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    borderLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -357)
+    borderLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 440, -357)
     borderLabel:SetText("Border style")
 
     local borderSelector = CreateFrame(
@@ -1005,8 +1005,8 @@ local function CreateAppearanceSettingsPanel()
         panel,
         "WowStyle1DropdownTemplate"
     )
-    borderSelector:SetWidth(190)
-    borderSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -378)
+    borderSelector:SetWidth(170)
+    borderSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 440, -378)
     borderSelector:SetDefaultText("Thin")
     borderSelector.settingKey = "borderStyle"
     controls.borderStyle = borderSelector
@@ -1033,8 +1033,12 @@ local function CreateAppearanceSettingsPanel()
 
     borderSelector:SetupMenu(BuildBorderMenu)
 
+    local opacityHeading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    opacityHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -423)
+    opacityHeading:SetText("Opacity and Fading")
+
     controls.backgroundOpacity = CreateNumberSetting(
-        panel, "Background opacity", "backgroundOpacity", 330, -357, 0, 100,
+        panel, "Background opacity", "backgroundOpacity", 230, -450, 0, 100,
         function() return settings.backgroundOpacity * 100 end,
         function(value)
             settings.backgroundOpacity = value / 100
@@ -1044,7 +1048,7 @@ local function CreateAppearanceSettingsPanel()
     )
 
     controls.windowOpacity = CreateNumberSetting(
-        panel, "Active window opacity", "windowOpacity", 20, -437, 10, 100,
+        panel, "Active window opacity", "windowOpacity", 20, -450, 10, 100,
         function() return settings.windowOpacity * 100 end,
         function(value)
             settings.windowOpacity = value / 100
@@ -1057,19 +1061,7 @@ local function CreateAppearanceSettingsPanel()
         "%"
     )
 
-    controls.inactiveOpacity = CreateNumberSetting(
-        panel, "Inactive opacity", "inactiveOpacity", 330, -437, 10, 100,
-        function() return settings.inactiveOpacity * 100 end,
-        function(value)
-            settings.inactiveOpacity = math.min(
-                value / 100,
-                settings.windowOpacity
-            )
-            MainWindow.ApplyFadeSettings()
-        end,
-        "%"
-    )
-
+    local RefreshFadeControls
     local fadeCheckbox = CreateCheckbox(
         panel,
         "Fade the menu when inactive",
@@ -1077,6 +1069,11 @@ local function CreateAppearanceSettingsPanel()
         function() return settings.fadeEnabled end,
         function(value)
             settings.fadeEnabled = value
+
+            if RefreshFadeControls then
+                RefreshFadeControls()
+            end
+
             MainWindow.ApplyFadeSettings()
         end
     )
@@ -1093,9 +1090,40 @@ local function CreateAppearanceSettingsPanel()
         "seconds"
     )
 
+    controls.inactiveOpacity = CreateNumberSetting(
+        panel, "Inactive opacity", "inactiveOpacity", 230, -552, 10, 100,
+        function() return settings.inactiveOpacity * 100 end,
+        function(value)
+            settings.inactiveOpacity = math.min(
+                value / 100,
+                settings.windowOpacity
+            )
+            MainWindow.ApplyFadeSettings()
+        end,
+        "%"
+    )
+
+    RefreshFadeControls = function()
+        local fadeEnabled = settings.fadeEnabled
+        local opacity = fadeEnabled and 1 or 0.45
+
+        for _, control in ipairs({controls.fadeDelay, controls.inactiveOpacity}) do
+            if fadeEnabled then
+                control:Enable()
+            else
+                control:ClearFocus()
+                control:Disable()
+            end
+
+            control:SetAlpha(opacity)
+            control.Label:SetAlpha(opacity)
+            control.SuffixLabel:SetAlpha(opacity)
+        end
+    end
+
     local resetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    resetButton:SetSize(190, 24)
-    resetButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 330, -574)
+    resetButton:SetSize(170, 24)
+    resetButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 440, -574)
     resetButton:SetText("Reset Appearance")
     resetButton.settingKey = "resetAppearance"
     controls.resetAppearance = resetButton
@@ -1131,6 +1159,7 @@ local function CreateAppearanceSettingsPanel()
         RefreshHighlightControls()
         borderSelector:OverrideText(borderLabels[settings.borderStyle])
         fadeCheckbox:SetChecked(settings.fadeEnabled)
+        RefreshFadeControls()
     end
 
     resetButton:SetScript("OnClick", function()
