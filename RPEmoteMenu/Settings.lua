@@ -1144,6 +1144,7 @@ local function CreateAppearanceSettingsPanel()
             end
         end
 
+        MainWindow.SetSelectedCategory(addon.DefaultSettings.selectedCategory)
         RefreshControls()
         MainWindow.ApplyAppearance()
     end)
