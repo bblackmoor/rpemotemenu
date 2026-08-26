@@ -4,12 +4,12 @@
 
 A customizable emote menu for **World of Warcraft** roleplayers.
 
-- **Emotes:** Up to 100 across 10 categories, including targeted commands.
+- **Emotes:** Up to 100 emotes across 10 categories, with optional targeted commands.
 - **Profiles:** Create, copy, rename, delete, and share character profiles.
 - **Sharing:** Import or export individual categories and complete profiles.
-- **Appearance:** Customize fonts, colors, borders, opacity, and smooth fading.
-- **Window:** Move, resize, minimize, or lock the menu.
-- **Commands:** `/rpem` toggles the menu; `/rpem config` opens settings.
+- **Appearance:** Customize fonts, colors, selection effects, borders, opacity, and fading per profile.
+- **Window:** Move, resize, minimize, or lock the menu, with a separate width for each column.
+- **Commands:** `/rpem` toggles the menu; `/rpem config` opens its settings.
 
 ## Screenshots
 
@@ -31,30 +31,27 @@ Place the `RPEmoteMenu` folder in your World of Warcraft addons directory:
 World of Warcraft/_retail_/Interface/AddOns/RPEmoteMenu/
 ```
 
-Enable **RP Emote Menu** from the character-selection screen's AddOns list if
-necessary.
+Enable **RP Emote Menu** from the character-selection screen's AddOns list if necessary.
 
 ## Getting Started
 
 1. Enter `/rpem` to show or hide the menu.
-2. Choose a category and select an emote.
-3. Open settings using the gear icon or `/rpem config`.
-4. Under **Profiles**, create a profile before making changes.
-5. Under **Categories**, choose a category from the dropdown and edit its emotes.
+2. Choose a category, then select an emote.
+3. Open settings with the gear icon or `/rpem config`.
+4. Under **Profiles**, create or copy a profile if you want to customize categories and emotes.
+5. Under **Emotes**, choose a category and edit its name and commands.
 
-The included **Default** profile is protected. New profiles begin with the
-default categories and emotes.
+The built-in **Default** profile is always available. Its categories and emotes are protected, but its window and appearance settings can be customized.
 
 ## Categories and Emotes
 
-Each profile supports **10 categories** with up to **10 emotes** each. Open
-**Categories** in the addon settings and choose a category from the dropdown.
+Each profile supports **10 categories** with up to **10 emotes** each. Open **Emotes** in the addon settings and choose a category from the dropdown.
 
 Each emote includes:
 
-- **Emote Label:** The name shown in the menu.
+- **Emote Label:** The text shown in the menu.
 - **Default Command:** The command used when you have no other target.
-- **Targeted Command:** An optional command used when targeting someone else.
+- **Targeted Command:** An optional command used when targeting another unit.
 
 Commands can use built-in emotes such as `/wave` or custom `/e` commands.
 
@@ -64,67 +61,66 @@ Default Command: /e watches quietly.
 Targeted Command: /e watches {target} quietly.
 ```
 
-An emote appears only when it has both a label and a default command. Categories
-without names remain hidden from the main menu.
+An emote appears only when it has both a label and a default command. A category appears only when it has a name.
+
+The **Emotes** screen can restore the selected category or every category in the current custom profile to the built-in set.
 
 ## Profiles
 
-A profile contains every category and emote. Profiles are available to all of
-your characters, and each character can choose a different active profile.
+A profile contains its categories, emotes, window layout, and appearance. Profiles are available to all of your characters, while each character independently chooses which profile to use.
 
-The **Default** profile cannot be edited, renamed, deleted, or used for category
-imports. Create or copy a profile to customize your emotes.
+The **Default** profile has protected categories and is local only. It cannot be imported, exported, renamed, or deleted. Its window and appearance settings remain customizable and persistent.
 
 The **Profiles** settings screen includes:
 
-- **Create Profile:** Start a new profile with the default categories.
-- **Copy Profile:** Duplicate the currently selected profile.
-- **Rename Profile:** Rename the selected custom profile.
-- **Delete Profile:** Delete the selected custom profile after confirmation.
-- **Export Profile:** Copy the complete profile for sharing.
-- **Import Profile:** Import a shared profile using a new profile name.
+- **Create Profile:** Create a profile with the built-in categories and the current profile's settings.
+- **Copy Profile:** Duplicate the current profile, including its categories, emotes, layout, and appearance.
+- **Rename Profile:** Rename the current custom profile.
+- **Delete Profile:** Delete the current custom profile after confirmation.
+- **Export Profile:** Copy the current custom profile as JSON.
+- **Import Profile:** Add a profile from exported JSON.
 
-When a profile is deleted, characters using it return to **Default**.
+Imported profiles do not replace or activate existing profiles. If an imported name is already in use, the addon assigns the new profile a unique name. Deleting a profile returns characters using it to **Default**.
 
-Profile names cannot be blank, exceed 64 characters, duplicate another name
-regardless of case, or use the reserved name **Default**.
+Profile names cannot be blank, exceed 64 characters, duplicate another name regardless of case, or use the reserved name **Default**.
 
 ## Import and Export
 
-The **Categories** screen includes **Export** and **Import** buttons for the
-selected category. Importing replaces that category in the current editable
-profile.
+The **Emotes** screen can export the selected category or replace that category in the current custom profile with an imported one.
 
-The **Profiles** screen includes **Export Profile** and **Import Profile**.
-Importing a profile creates a new profile; it does not overwrite an existing
-profile or change **Default**.
+The **Profiles** screen can import or export one custom profile. The separate **Import & Export** screen can import or export all custom profiles at once.
 
-Categories and profiles are shared as JSON text. Invalid imports do not replace
-your existing emotes.
+Profile exports include sharable window settings, appearance, categories, and emotes. They do not include the local **Default** profile, character names, realms, character assignments, the last selected category, or the current minimized state.
+
+All transfers use JSON text. Imports are validated before any existing category is replaced or any new profiles are added. Bulk imports skip **Default**, preserve existing profiles, and automatically rename conflicts.
 
 ## Fonts and Colors
 
-The **Fonts and Colors** settings screen lets you adjust:
+The **Fonts & Colors** settings screen customizes the current profile:
 
-- Font size and text color for category names and emote labels.
-- Background color and opacity.
-- Border color and style: **None**, **Thin**, or **Blizzard**.
-- Window opacity while active.
-- Optional smooth fading after inactivity, including the delay and faded
-  opacity.
+- Separate fonts and font sizes for category names and emote labels.
+- Category text, selected text, emote text, selection, background, and border colors.
+- Selection effects: **Background**, **Outline**, **Separator**, **Underline**, or **Drop shadow**.
+- Border styles: **None**, **Thin**, or **Blizzard**.
+- Background opacity and active window opacity.
+- Optional inactivity fading, with configurable delay and inactive opacity.
 
-Changes appear immediately and apply to every profile. Select
-**Reset Appearance** to restore the original appearance.
+The font menus include WOW's built-in fonts and fonts made available by LibSharedMedia-3.0 (if any). A custom font may take 10 to 30 seconds to appear the first time it is selected.
+
+Changes appear immediately. **Restore Defaults** resets the current profile's appearance.
 
 ## Window Settings
 
-The **General** settings screen lets you lock the window, hide the settings
-gear, choose whether the menu appears when you log in, and remember whether it
-was minimized.
+The **General** settings screen controls the current profile's window behavior and layout:
 
-You can also adjust or reset the window's position and size. Category settings
-include an individual reset, and **General** can reset every category in the
-current editable profile.
+- Lock movement and resizing.
+- Hide the settings gear icon.
+- Show or hide the addon at login.
+- Remember whether the window was minimized.
+- Set the window position, height, left-column width, and right-column width.
+- Restore the default position and size.
+
+The window can also be moved and resized directly while it is unlocked. Its category pane scrolls when necessary, and the title-bar button minimizes or restores it.
 
 ## Slash Commands
 
@@ -137,15 +133,14 @@ current editable profile.
 
 ## Target Tokens
 
-Use these tokens in emote commands to include character names:
+Use these tokens in either command to include character names:
 
 | Token      | Description                             |
 | :--------- | :-------------------------------------- |
 | `{target}` | Target's name without the realm         |
 | `{player}` | Your character's name without the realm |
 
-The **Targeted Command** is used only when another unit is targeted. Without a
-target, or when targeting yourself, the **Default Command** is used instead.
+The **Targeted Command** is used only when another unit is targeted. Without a target, or when targeting yourself, the **Default Command** is used instead.
 
 ---
 
