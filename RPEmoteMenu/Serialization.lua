@@ -7,7 +7,6 @@ local Database = addon.Database
 local JSON = addon.JSON
 local FORMAT_NAME = "RPEmoteMenu"
 local FORMAT_VERSION = 2
-local LEGACY_FORMAT_VERSION = 1
 local DEFAULT_PROFILE_NAME = "Default"
 local MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
 local MAX_PROFILE_NAME_LENGTH = 64
@@ -28,17 +27,8 @@ local PROFILE_DOCUMENT_FIELDS = {
     categories = true
 }
 local PROFILE_FIELDS = {name = true, settings = true, categories = true}
-local LEGACY_PROFILE_FIELDS = {name = true, categories = true}
 local PROFILES_DOCUMENT_FIELDS = {
     format = true, version = true, type = true, profiles = true
-}
-local LEGACY_BACKUP_FIELDS = {
-    format = true,
-    version = true,
-    type = true,
-    settings = true,
-    profiles = true,
-    activeProfiles = true
 }
 local CATEGORY_FIELDS = {name = true, emotes = true}
 local EMOTE_FIELDS = {label = true, defaultCommand = true, targetedCommand = true}
@@ -66,7 +56,6 @@ local PROFILE_SETTINGS_FIELDS = {
     categoryHighlightColor = true,
     categoryHighlightEffect = true,
     categoryHighlightThickness = true,
-    backgroundColor = true,
     categoryBackgroundColor = true,
     emoteBackgroundColor = true,
     borderColor = true,
@@ -77,12 +66,6 @@ local PROFILE_SETTINGS_FIELDS = {
     fadeDelay = true,
     inactiveOpacity = true
 }
-local LEGACY_SETTINGS_FIELDS = {}
-for key in pairs(PROFILE_SETTINGS_FIELDS) do
-    if key ~= "point" and key ~= "relativePoint" then
-        LEGACY_SETTINGS_FIELDS[key] = true
-    end
-end
 
 local BOOLEAN_SETTING_KEYS = {
     "locked",
@@ -317,9 +300,10 @@ local function ValidateCategories(value, description)
 end
 
 
-local function ValidateProfileSettings(value, legacy)
-    local fields = legacy and LEGACY_SETTINGS_FIELDS or PROFILE_SETTINGS_FIELDS
-    local valid, errorMessage = ValidateObject(value, fields, "Profile settings")
+local function ValidateProfileSettings(value)
+    local valid, errorMessage = ValidateObject(
+        value, PROFILE_SETTINGS_FIELDS, "Profile settings"
+    )
     if not valid then
         return nil, errorMessage
     end
@@ -330,34 +314,26 @@ local function ValidateProfileSettings(value, legacy)
         if imported[key] == nil then return nil, errorMessage end
     end
 
-    if not legacy then
-        if not VALID_ANCHOR_POINTS[value.point] then
-            return nil, "Setting point is not supported."
-        end
-        if not VALID_ANCHOR_POINTS[value.relativePoint] then
-            return nil, "Setting relativePoint is not supported."
-        end
-        imported.point = value.point
-        imported.relativePoint = value.relativePoint
+    if not VALID_ANCHOR_POINTS[value.point] then
+        return nil, "Setting point is not supported."
     end
+    if not VALID_ANCHOR_POINTS[value.relativePoint] then
+        return nil, "Setting relativePoint is not supported."
+    end
+    imported.point = value.point
+    imported.relativePoint = value.relativePoint
 
-    local positionPresent = value.x ~= nil or value.y ~= nil
-    if positionPresent and (value.x == nil or value.y == nil) then
+    if value.x == nil or value.y == nil then
         return nil, "Window position must contain both x and y."
     end
-    if not legacy and not positionPresent then
-        return nil, "Profile settings must contain a window position."
-    end
-    if positionPresent then
-        imported.x, errorMessage = ValidateNumber(
-            value.x, -100000, 100000, "Window position x", true
-        )
-        if imported.x == nil then return nil, errorMessage end
-        imported.y, errorMessage = ValidateNumber(
-            value.y, -100000, 100000, "Window position y", true
-        )
-        if imported.y == nil then return nil, errorMessage end
-    end
+    imported.x, errorMessage = ValidateNumber(
+        value.x, -100000, 100000, "Window position x", true
+    )
+    if imported.x == nil then return nil, errorMessage end
+    imported.y, errorMessage = ValidateNumber(
+        value.y, -100000, 100000, "Window position y", true
+    )
+    if imported.y == nil then return nil, errorMessage end
 
     imported.width, errorMessage = ValidateNumber(
         value.width,
@@ -378,11 +354,9 @@ local function ValidateProfileSettings(value, legacy)
         true
     )
     if not imported.sidebarWidth then return nil, errorMessage end
-    local derivedEmoteColumnWidth = value.width
-        - imported.sidebarWidth - addon.COLUMN_CHROME_WIDTH
     imported.emoteColumnWidth, errorMessage = ValidateNumber(
-        value.emoteColumnWidth or derivedEmoteColumnWidth,
-        value.emoteColumnWidth and addon.MIN_EMOTE_COLUMN_WIDTH or 45,
+        value.emoteColumnWidth,
+        addon.MIN_EMOTE_COLUMN_WIDTH,
         addon.MAX_EMOTE_COLUMN_WIDTH,
         "Right column width",
         true
@@ -409,12 +383,9 @@ local function ValidateProfileSettings(value, legacy)
     if not imported.emoteFontSize then return nil, errorMessage end
 
     for _, key in ipairs(COLOR_SETTING_KEYS) do
-        local colorValue = value[key]
-        if (key == "categoryBackgroundColor" or key == "emoteBackgroundColor")
-            and colorValue == nil then
-            colorValue = value.backgroundColor
-        end
-        imported[key], errorMessage = ValidateColor(colorValue, "Setting " .. key)
+        imported[key], errorMessage = ValidateColor(
+            value[key], "Setting " .. key
+        )
         if not imported[key] then return nil, errorMessage end
     end
 
@@ -463,7 +434,7 @@ local function ValidateProfileSettings(value, legacy)
 end
 
 
-local function ValidateProfile(value, description, allowedFields, settingsRequired)
+local function ValidateProfile(value, description, allowedFields)
     local valid, errorMessage = ValidateObject(value, allowedFields, description)
     if not valid then return nil, errorMessage end
 
@@ -480,13 +451,12 @@ local function ValidateProfile(value, description, allowedFields, settingsRequir
     categories, errorMessage = ValidateCategories(value.categories, description)
     if not categories then return nil, errorMessage end
 
-    local profileSettings
-    if value.settings ~= nil then
-        profileSettings, errorMessage = ValidateProfileSettings(value.settings, false)
-        if not profileSettings then return nil, errorMessage end
-    elseif settingsRequired then
+    if value.settings == nil then
         return nil, description .. " settings are missing."
     end
+    local profileSettings
+    profileSettings, errorMessage = ValidateProfileSettings(value.settings)
+    if not profileSettings then return nil, errorMessage end
 
     return {
         name = profileName,
@@ -566,7 +536,7 @@ local function IsValidCategoryIndex(categoryIndex)
 end
 
 
-local function ValidateProfileArray(value, description, legacy, legacySettings)
+local function ValidateProfileArray(value, description)
     if not JSON.IsArray(value) then
         return nil, description .. " must be an array."
     end
@@ -579,8 +549,7 @@ local function ValidateProfileArray(value, description, legacy, legacySettings)
         profile, errorMessage = ValidateProfile(
             sourceProfile,
             "Profile " .. index,
-            legacy and LEGACY_PROFILE_FIELDS or PROFILE_FIELDS,
-            not legacy
+            PROFILE_FIELDS
         )
         if not profile then return nil, errorMessage end
 
@@ -590,9 +559,6 @@ local function ValidateProfileArray(value, description, legacy, legacySettings)
         end
         profileNames[normalizedName] = true
 
-        if not profile.settings and legacySettings then
-            profile.settings = Database.CopySettings(legacySettings)
-        end
         profiles[#profiles + 1] = profile
     end
 
@@ -666,11 +632,11 @@ function Serialization.Decode(text, expectedType)
     if value.format ~= FORMAT_NAME then
         return nil, "This data was not exported by RP Emote Menu."
     end
-    if value.version ~= FORMAT_VERSION and value.version ~= LEGACY_FORMAT_VERSION then
+    if value.version ~= FORMAT_VERSION then
         return nil, "This import format version is not supported."
     end
 
-    local actualType = value.type == "backup" and "profiles" or value.type
+    local actualType = value.type
     if actualType ~= "category" and actualType ~= "profile" and actualType ~= "profiles" then
         return nil, "The import data has an unsupported type."
     end
@@ -694,48 +660,19 @@ function Serialization.Decode(text, expectedType)
         profile, errorMessage = ValidateProfile(
             value,
             "Profile",
-            PROFILE_DOCUMENT_FIELDS,
-            value.version == FORMAT_VERSION
+            PROFILE_DOCUMENT_FIELDS
         )
         if not profile then return nil, errorMessage end
         profile.type = "profile"
         return profile
     end
 
-    if value.type == "backup" then
-        local valid
-        valid, errorMessage = ValidateObject(value, LEGACY_BACKUP_FIELDS, "Import data")
-        if not valid then return nil, errorMessage end
-        if value.version ~= LEGACY_FORMAT_VERSION then
-            return nil, "This legacy backup version is not supported."
-        end
-
-        local legacySettings
-        legacySettings, errorMessage = ValidateProfileSettings(value.settings, true)
-        if not legacySettings then return nil, errorMessage end
-
-        local profiles
-        profiles, errorMessage = ValidateProfileArray(
-            value.profiles,
-            "Backup profiles",
-            true,
-            legacySettings
-        )
-        if not profiles then return nil, errorMessage end
-        return {type = "profiles", profiles = profiles, profileCount = #profiles}
-    end
-
     local valid
     valid, errorMessage = ValidateObject(value, PROFILES_DOCUMENT_FIELDS, "Import data")
     if not valid then return nil, errorMessage end
-    if value.version ~= FORMAT_VERSION then
-        return nil, "This all-profiles export version is not supported."
-    end
 
     local profiles
-    profiles, errorMessage = ValidateProfileArray(
-        value.profiles, "Profiles", false
-    )
+    profiles, errorMessage = ValidateProfileArray(value.profiles, "Profiles")
     if not profiles then return nil, errorMessage end
     return {type = "profiles", profiles = profiles, profileCount = #profiles}
 end

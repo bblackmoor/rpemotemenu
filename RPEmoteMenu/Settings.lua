@@ -507,7 +507,7 @@ local function GetExchangeDialog()
         instructions:SetText(
             "Paste a custom-profiles export below. Importing only adds profiles; it "
             .. "does not replace, activate, or assign them to characters. Any Default "
-            .. "profile in an older export is skipped."
+            .. "profile in the import is skipped."
         )
         actionButton:SetText("Import Custom Profiles")
         SetStatus("")
@@ -836,46 +836,23 @@ local function CreateFontSetting(parent, labelText, settingKey, x, y)
     selector.PreviewText:SetPoint("RIGHT", selector, "RIGHT", -30, 0)
     selector.PreviewText:SetJustifyH("LEFT")
     selector.PreviewText:SetWordWrap(false)
+    selector.PreviewText:SetFont(STANDARD_TEXT_FONT, 12, "")
+    selector.PreviewText:SetTextColor(1, 1, 1, 1)
 
     selector.RefreshValue = function(self)
-        local fontName = settings[settingKey]
-        local fontSizeKey = settingKey == "categoryFont"
-            and "categoryFontSize"
-            or "emoteFontSize"
-        local textColorKey = settingKey == "categoryFont"
-            and "categoryTextColor"
-            or "emoteTextColor"
+        local fontName = settings[settingKey] or ""
         self:OverrideText(fontName)
         if self.InternalText then
             self.InternalText:SetAlpha(0)
         end
 
         local previewText = self.PreviewText
-
-        if previewText and type(previewText.SetFont) == "function" then
-            local _, _, previewFlags = previewText:GetFont()
-            local fontPath = addon.GetFontPath(fontName)
-            local previewSize = settings[fontSizeKey] or 12
-            local previewColor = settings[textColorKey]
-
-            local applied = previewText:SetFont(
-                fontPath, previewSize, previewFlags or ""
-            )
-
+        if previewText then
+            -- The selected-font label must remain readable while a custom font
+            -- is still loading. Only the menu itself previews custom fonts.
+            previewText:SetFont(STANDARD_TEXT_FONT, 12, "")
+            previewText:SetTextColor(1, 1, 1, 1)
             previewText:SetText(fontName)
-
-            if not applied or previewText:GetStringWidth() <= 0 then
-                previewText:SetFont(STANDARD_TEXT_FONT, previewSize, previewFlags or "")
-                previewText:SetText("")
-                previewText:SetText(fontName)
-            end
-
-            previewText:SetTextColor(
-                previewColor.r,
-                previewColor.g,
-                previewColor.b,
-                1
-            )
         end
     end
 
@@ -1551,7 +1528,7 @@ local function CreateImportExportSettingsPanel()
     importNote:SetText(
         "Importing only adds custom profiles. It does not replace existing profiles, "
         .. "change the current profile, or assign profiles to characters. Default entries "
-        .. "from older exports are skipped, and name conflicts are renamed automatically. "
+        .. "are skipped, and name conflicts are renamed automatically. "
         .. "Review profile names and custom emote text before sharing."
     )
     importNote:SetTextColor(0.7, 0.7, 0.7)

@@ -171,17 +171,6 @@ local function RestoreWindowPosition()
         settings.x,
         settings.y
     )
-
-    -- Convert older saved CENTER or other anchors to the stable TOPLEFT anchor.
-    SaveWindowPosition()
-    MainFrame:ClearAllPoints()
-    MainFrame:SetPoint(
-        settings.point,
-        UIParent,
-        settings.relativePoint,
-        settings.x,
-        settings.y
-    )
 end
 
 local function SaveWindowSize()
@@ -1291,7 +1280,6 @@ function MainWindow.ApplyProfileSettings()
         return
     end
 
-    -- Restore size first so legacy non-TOPLEFT anchors can be converted accurately.
     RestoreWindowSize()
     RestoreWindowPosition()
     MainWindow.ApplySidebarWidth(settings.sidebarWidth)

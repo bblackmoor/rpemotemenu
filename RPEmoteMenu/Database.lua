@@ -7,7 +7,7 @@ local defaultSections = addon.DefaultSections
 local defaults = addon.DefaultSettings
 local MAX_CATEGORIES = addon.MAX_CATEGORIES
 local MAX_EMOTES = addon.MAX_EMOTES
-local SCHEMA_VERSION = 5
+local SCHEMA_VERSION = 6
 local DEFAULT_PROFILE_NAME = "Default"
 local MAX_PROFILE_NAME_LENGTH = 64
 
@@ -201,47 +201,11 @@ local function NormalizeSettings(source)
         defaults.sidebarWidth
     ))
     result.emoteColumnWidth = math.floor(ClampNumber(
-        source.emoteColumnWidth
-            or ((tonumber(source.width) or defaults.width)
-                - result.sidebarWidth - addon.COLUMN_CHROME_WIDTH),
+        source.emoteColumnWidth,
         addon.MIN_EMOTE_COLUMN_WIDTH,
         addon.MAX_EMOTE_COLUMN_WIDTH,
         defaults.emoteColumnWidth
     ))
-    if source.emoteColumnWidth == nil then
-        local targetWidth = math.floor(ClampNumber(
-            source.width,
-            addon.MIN_SIDEBAR_WIDTH + addon.MIN_EMOTE_COLUMN_WIDTH
-                + addon.COLUMN_CHROME_WIDTH,
-            600,
-            defaults.width
-        ))
-        local delta = targetWidth - addon.COLUMN_CHROME_WIDTH
-            - result.sidebarWidth - result.emoteColumnWidth
-
-        if delta > 0 then
-            local rightChange = math.min(
-                delta,
-                addon.MAX_EMOTE_COLUMN_WIDTH - result.emoteColumnWidth
-            )
-            result.emoteColumnWidth = result.emoteColumnWidth + rightChange
-            result.sidebarWidth = result.sidebarWidth + math.min(
-                delta - rightChange,
-                addon.MAX_SIDEBAR_WIDTH - result.sidebarWidth
-            )
-        elseif delta < 0 then
-            local remaining = -delta
-            local rightChange = math.min(
-                remaining,
-                result.emoteColumnWidth - addon.MIN_EMOTE_COLUMN_WIDTH
-            )
-            result.emoteColumnWidth = result.emoteColumnWidth - rightChange
-            result.sidebarWidth = result.sidebarWidth - math.min(
-                remaining - rightChange,
-                result.sidebarWidth - addon.MIN_SIDEBAR_WIDTH
-            )
-        end
-    end
     result.width = result.sidebarWidth
         + result.emoteColumnWidth
         + addon.COLUMN_CHROME_WIDTH
@@ -266,14 +230,8 @@ local function NormalizeSettings(source)
         defaults.categoryHighlightThickness
     ))
 
-    local legacyBackground = source.backgroundColor
     for _, key in ipairs(COLOR_SETTING_KEYS) do
-        local sourceColor = source[key]
-        if (key == "categoryBackgroundColor" or key == "emoteBackgroundColor")
-            and sourceColor == nil then
-            sourceColor = legacyBackground
-        end
-        result[key] = NormalizeColor(sourceColor, defaults[key])
+        result[key] = NormalizeColor(source[key], defaults[key])
     end
 
     if not VALID_CATEGORY_HIGHLIGHT_EFFECTS[result.categoryHighlightEffect] then
@@ -612,14 +570,13 @@ end
 
 
 function Database.AddImportedProfiles(importedProfiles)
-    local fallbackSettings = CopySettings(Database.GetSettings())
     local createdNames = {}
 
     for _, imported in ipairs(importedProfiles or {}) do
         local profileName = ImportedProfileName(imported.name)
         RPEmoteMenuDB.profiles[profileName] = {
             categories = CopyCategories(imported.categories),
-            settings = CopySettings(imported.settings or fallbackSettings)
+            settings = CopySettings(imported.settings)
         }
         createdNames[#createdNames + 1] = profileName
     end
@@ -632,8 +589,6 @@ end
 function Database.InitializeDatabase()
     RPEmoteMenuDB = type(RPEmoteMenuDB) == "table" and RPEmoteMenuDB or {}
 
-    local legacySettings = NormalizeSettings(RPEmoteMenuDB)
-    RPEmoteMenuDB.categories = nil
     RPEmoteMenuDB.profiles = type(RPEmoteMenuDB.profiles) == "table"
         and RPEmoteMenuDB.profiles
         or {}
@@ -644,7 +599,7 @@ function Database.InitializeDatabase()
     local existingDefault = RPEmoteMenuDB.profiles[DEFAULT_PROFILE_NAME]
     local defaultSettings = existingDefault and existingDefault.settings
         and NormalizeSettings(existingDefault.settings)
-        or CopySettings(legacySettings)
+        or CopySettings(defaults)
 
     local invalidProfiles = {}
     for profileName, profile in pairs(RPEmoteMenuDB.profiles) do
@@ -658,7 +613,7 @@ function Database.InitializeDatabase()
                 or CopyDefaultCategories()
             profile.settings = type(profile.settings) == "table"
                 and NormalizeSettings(profile.settings)
-                or CopySettings(legacySettings)
+                or CopySettings(defaults)
         end
     end
 
@@ -673,13 +628,6 @@ function Database.InitializeDatabase()
     }
     RPEmoteMenuDB.emoteDataVersion = defaults.emoteDataVersion
     RPEmoteMenuDB.schemaVersion = SCHEMA_VERSION
-
-    for key in pairs(defaults) do
-        if key ~= "emoteDataVersion" then
-            RPEmoteMenuDB[key] = nil
-        end
-    end
-    RPEmoteMenuDB.backgroundColor = nil
 
     local invalidCharacterKeys = {}
     for characterKey, profileName in pairs(RPEmoteMenuDB.activeProfiles) do
