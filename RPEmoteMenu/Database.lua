@@ -7,7 +7,7 @@ local defaultSections = addon.DefaultSections
 local defaults = addon.DefaultSettings
 local MAX_CATEGORIES = addon.MAX_CATEGORIES
 local MAX_EMOTES = addon.MAX_EMOTES
-local SCHEMA_VERSION = 4
+local SCHEMA_VERSION = 5
 local DEFAULT_PROFILE_NAME = "Default"
 local MAX_PROFILE_NAME_LENGTH = 64
 
@@ -15,7 +15,8 @@ local VALID_CATEGORY_HIGHLIGHT_EFFECTS = {
     background = true,
     outline = true,
     underline = true,
-    shadow = true
+    shadow = true,
+    separator = true
 }
 local VALID_BORDER_STYLES = {none = true, thin = true, blizzard = true}
 local VALID_ANCHOR_POINTS = {
@@ -34,7 +35,8 @@ local COLOR_SETTING_KEYS = {
     "selectedCategoryTextColor",
     "emoteTextColor",
     "categoryHighlightColor",
-    "backgroundColor",
+    "categoryBackgroundColor",
+    "emoteBackgroundColor",
     "borderColor"
 }
 
@@ -176,7 +178,6 @@ local function NormalizeSettings(source)
         end
     end
 
-    result.width = math.floor(ClampNumber(source.width, 250, 600, defaults.width))
     result.height = math.floor(ClampNumber(source.height, 150, 600, defaults.height))
     result.x = math.floor(ClampNumber(source.x, -100000, 100000, defaults.x))
     result.y = math.floor(ClampNumber(source.y, -100000, 100000, defaults.y))
@@ -199,6 +200,51 @@ local function NormalizeSettings(source)
         addon.MAX_SIDEBAR_WIDTH,
         defaults.sidebarWidth
     ))
+    result.emoteColumnWidth = math.floor(ClampNumber(
+        source.emoteColumnWidth
+            or ((tonumber(source.width) or defaults.width)
+                - result.sidebarWidth - addon.COLUMN_CHROME_WIDTH),
+        addon.MIN_EMOTE_COLUMN_WIDTH,
+        addon.MAX_EMOTE_COLUMN_WIDTH,
+        defaults.emoteColumnWidth
+    ))
+    if source.emoteColumnWidth == nil then
+        local targetWidth = math.floor(ClampNumber(
+            source.width,
+            addon.MIN_SIDEBAR_WIDTH + addon.MIN_EMOTE_COLUMN_WIDTH
+                + addon.COLUMN_CHROME_WIDTH,
+            600,
+            defaults.width
+        ))
+        local delta = targetWidth - addon.COLUMN_CHROME_WIDTH
+            - result.sidebarWidth - result.emoteColumnWidth
+
+        if delta > 0 then
+            local rightChange = math.min(
+                delta,
+                addon.MAX_EMOTE_COLUMN_WIDTH - result.emoteColumnWidth
+            )
+            result.emoteColumnWidth = result.emoteColumnWidth + rightChange
+            result.sidebarWidth = result.sidebarWidth + math.min(
+                delta - rightChange,
+                addon.MAX_SIDEBAR_WIDTH - result.sidebarWidth
+            )
+        elseif delta < 0 then
+            local remaining = -delta
+            local rightChange = math.min(
+                remaining,
+                result.emoteColumnWidth - addon.MIN_EMOTE_COLUMN_WIDTH
+            )
+            result.emoteColumnWidth = result.emoteColumnWidth - rightChange
+            result.sidebarWidth = result.sidebarWidth - math.min(
+                remaining - rightChange,
+                result.sidebarWidth - addon.MIN_SIDEBAR_WIDTH
+            )
+        end
+    end
+    result.width = result.sidebarWidth
+        + result.emoteColumnWidth
+        + addon.COLUMN_CHROME_WIDTH
 
     if strtrim(result.categoryFont) == "" then
         result.categoryFont = defaults.categoryFont
@@ -220,8 +266,14 @@ local function NormalizeSettings(source)
         defaults.categoryHighlightThickness
     ))
 
+    local legacyBackground = source.backgroundColor
     for _, key in ipairs(COLOR_SETTING_KEYS) do
-        result[key] = NormalizeColor(source[key], defaults[key])
+        local sourceColor = source[key]
+        if (key == "categoryBackgroundColor" or key == "emoteBackgroundColor")
+            and sourceColor == nil then
+            sourceColor = legacyBackground
+        end
+        result[key] = NormalizeColor(sourceColor, defaults[key])
     end
 
     if not VALID_CATEGORY_HIGHLIGHT_EFFECTS[result.categoryHighlightEffect] then
@@ -627,6 +679,7 @@ function Database.InitializeDatabase()
             RPEmoteMenuDB[key] = nil
         end
     end
+    RPEmoteMenuDB.backgroundColor = nil
 
     local invalidCharacterKeys = {}
     for characterKey, profileName in pairs(RPEmoteMenuDB.activeProfiles) do

@@ -55,6 +55,7 @@ local PROFILE_SETTINGS_FIELDS = {
     width = true,
     height = true,
     sidebarWidth = true,
+    emoteColumnWidth = true,
     categoryFont = true,
     emoteFont = true,
     categoryFontSize = true,
@@ -66,6 +67,8 @@ local PROFILE_SETTINGS_FIELDS = {
     categoryHighlightEffect = true,
     categoryHighlightThickness = true,
     backgroundColor = true,
+    categoryBackgroundColor = true,
+    emoteBackgroundColor = true,
     borderColor = true,
     borderStyle = true,
     backgroundOpacity = true,
@@ -93,11 +96,13 @@ local COLOR_SETTING_KEYS = {
     "selectedCategoryTextColor",
     "emoteTextColor",
     "categoryHighlightColor",
-    "backgroundColor",
+    "categoryBackgroundColor",
+    "emoteBackgroundColor",
     "borderColor"
 }
 local VALID_CATEGORY_HIGHLIGHT_EFFECTS = {
-    background = true, outline = true, underline = true, shadow = true
+    background = true, outline = true, underline = true, shadow = true,
+    separator = true
 }
 local VALID_BORDER_STYLES = {none = true, thin = true, blizzard = true}
 local VALID_ANCHOR_POINTS = {
@@ -354,7 +359,14 @@ local function ValidateProfileSettings(value, legacy)
         if imported.y == nil then return nil, errorMessage end
     end
 
-    imported.width, errorMessage = ValidateNumber(value.width, 250, 600, "Window width", true)
+    imported.width, errorMessage = ValidateNumber(
+        value.width,
+        addon.MIN_SIDEBAR_WIDTH + addon.MIN_EMOTE_COLUMN_WIDTH
+            + addon.COLUMN_CHROME_WIDTH,
+        600,
+        "Window width",
+        true
+    )
     if not imported.width then return nil, errorMessage end
     imported.height, errorMessage = ValidateNumber(value.height, 150, 600, "Window height", true)
     if not imported.height then return nil, errorMessage end
@@ -366,6 +378,16 @@ local function ValidateProfileSettings(value, legacy)
         true
     )
     if not imported.sidebarWidth then return nil, errorMessage end
+    local derivedEmoteColumnWidth = value.width
+        - imported.sidebarWidth - addon.COLUMN_CHROME_WIDTH
+    imported.emoteColumnWidth, errorMessage = ValidateNumber(
+        value.emoteColumnWidth or derivedEmoteColumnWidth,
+        value.emoteColumnWidth and addon.MIN_EMOTE_COLUMN_WIDTH or 45,
+        addon.MAX_EMOTE_COLUMN_WIDTH,
+        "Right column width",
+        true
+    )
+    if not imported.emoteColumnWidth then return nil, errorMessage end
 
     for _, key in ipairs({"categoryFont", "emoteFont"}) do
         imported[key], errorMessage = ValidateString(
@@ -387,7 +409,12 @@ local function ValidateProfileSettings(value, legacy)
     if not imported.emoteFontSize then return nil, errorMessage end
 
     for _, key in ipairs(COLOR_SETTING_KEYS) do
-        imported[key], errorMessage = ValidateColor(value[key], "Setting " .. key)
+        local colorValue = value[key]
+        if (key == "categoryBackgroundColor" or key == "emoteBackgroundColor")
+            and colorValue == nil then
+            colorValue = value.backgroundColor
+        end
+        imported[key], errorMessage = ValidateColor(colorValue, "Setting " .. key)
         if not imported[key] then return nil, errorMessage end
     end
 
@@ -502,6 +529,7 @@ local function ExportProfileSettings(source)
     end
     for _, key in ipairs({
         "point", "relativePoint", "x", "y", "width", "height", "sidebarWidth",
+        "emoteColumnWidth",
         "categoryFont", "emoteFont", "categoryFontSize", "emoteFontSize",
         "categoryHighlightEffect", "categoryHighlightThickness", "borderStyle",
         "backgroundOpacity", "windowOpacity", "fadeDelay", "inactiveOpacity"

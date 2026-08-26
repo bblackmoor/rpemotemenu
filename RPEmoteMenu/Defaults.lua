@@ -218,6 +218,7 @@ addon.DefaultSettings = {
     width = 300,
     height = 250,
     sidebarWidth = 112,
+    emoteColumnWidth = 153,
     categoryFont = "Friz Quadrata",
     emoteFont = "Friz Quadrata",
     categoryFontSize = 12,
@@ -228,7 +229,8 @@ addon.DefaultSettings = {
     categoryHighlightColor = {r = 0.3, g = 0.25, b = 0.12},
     categoryHighlightEffect = "background",
     categoryHighlightThickness = 2,
-    backgroundColor = {r = 0.12, g = 0.12, b = 0.12},
+    categoryBackgroundColor = {r = 0.12, g = 0.12, b = 0.12},
+    emoteBackgroundColor = {r = 0.12, g = 0.12, b = 0.12},
     borderColor = {r = 0.2, g = 0.2, b = 0.2},
     borderStyle = "thin",
     backgroundOpacity = 1.0,
@@ -248,3 +250,6 @@ addon.MAX_CATEGORIES = #addon.DefaultSections
 addon.MAX_EMOTES = 10
 addon.MIN_SIDEBAR_WIDTH = 60
 addon.MAX_SIDEBAR_WIDTH = 220
+addon.MIN_EMOTE_COLUMN_WIDTH = 45
+addon.MAX_EMOTE_COLUMN_WIDTH = 345
+addon.COLUMN_CHROME_WIDTH = 35

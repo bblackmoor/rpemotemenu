@@ -15,14 +15,18 @@ local function Trim(value)
 end
 
 local collapsedHeight = 30
-local minimumWidth = 250
+local columnChromeWidth = addon.COLUMN_CHROME_WIDTH
+local minimumWidth = addon.MIN_SIDEBAR_WIDTH
+    + addon.MIN_EMOTE_COLUMN_WIDTH + columnChromeWidth
 local minimumHeight = 150
 local maximumWidth = 600
 local maximumHeight = 600
 local sidebarWidth = defaults.sidebarWidth
+local emoteColumnWidth = defaults.emoteColumnWidth
 local minimumSidebarWidth = addon.MIN_SIDEBAR_WIDTH
 local maximumSidebarWidth = addon.MAX_SIDEBAR_WIDTH
-local minimumEmoteColumnWidth = 45
+local minimumEmoteColumnWidth = addon.MIN_EMOTE_COLUMN_WIDTH
+local maximumEmoteColumnWidth = addon.MAX_EMOTE_COLUMN_WIDTH
 local categoryButtonHeight = 24
 local emoteButtonHeight = 20
 
@@ -48,6 +52,7 @@ local opacityAnimation
 local opacityAnimationTarget
 local fadeOutDuration = 0.5
 local fadeInDuration = 0.2
+local isApplyingColumnSize = false
 
 local function RefreshGeneralWindowFields()
     if addon.Settings and addon.Settings.RefreshGeneralWindowFields then
@@ -55,15 +60,40 @@ local function RefreshGeneralWindowFields()
     end
 end
 
-local function GetMaximumSidebarWidth(windowWidth)
-    return math.max(
-        minimumSidebarWidth,
-        math.min(
-            maximumSidebarWidth,
-            math.floor(windowWidth) - 35 - minimumEmoteColumnWidth
-        )
-    )
+local function ClampColumnWidth(value, minimum, maximum, fallback)
+    value = math.floor(tonumber(value) or fallback)
+    return math.max(minimum, math.min(maximum, value))
 end
+
+local function DistributeWindowWidth(width)
+    local target = math.max(minimumWidth, math.min(maximumWidth,
+        math.floor(tonumber(width) or settings.width or defaults.width)))
+    local left = ClampColumnWidth(
+        sidebarWidth, minimumSidebarWidth, maximumSidebarWidth, defaults.sidebarWidth
+    )
+    local right = ClampColumnWidth(
+        emoteColumnWidth,
+        minimumEmoteColumnWidth,
+        maximumEmoteColumnWidth,
+        defaults.emoteColumnWidth
+    )
+    local delta = target - columnChromeWidth - left - right
+
+    if delta > 0 then
+        local rightChange = math.min(delta, maximumEmoteColumnWidth - right)
+        right = right + rightChange
+        left = left + math.min(delta - rightChange, maximumSidebarWidth - left)
+    elseif delta < 0 then
+        local remaining = -delta
+        local rightChange = math.min(remaining, right - minimumEmoteColumnWidth)
+        right = right - rightChange
+        left = left - math.min(remaining - rightChange, left - minimumSidebarWidth)
+    end
+
+    return left, right, left + right + columnChromeWidth
+end
+
+local ApplyColumnLayout
 
 local function ClampWindowGeometry(x, y, width, height)
     local screenWidth = math.floor(UIParent:GetWidth() + 0.5)
@@ -88,6 +118,7 @@ end
 
 function MainWindow.ApplyWindowGeometry(x, y, width, height)
     x, y, width, height = ClampWindowGeometry(x, y, width, height)
+    sidebarWidth, emoteColumnWidth, width = DistributeWindowWidth(width)
 
     settings.point = "TOPLEFT"
     settings.relativePoint = "BOTTOMLEFT"
@@ -99,11 +130,14 @@ function MainWindow.ApplyWindowGeometry(x, y, width, height)
     MainFrame:ClearAllPoints()
     MainFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x, y)
 
+    isApplyingColumnSize = true
     if isWindowCollapsed then
         MainFrame:SetSize(width, collapsedHeight)
     else
         MainFrame:SetSize(width, height)
     end
+    isApplyingColumnSize = false
+    ApplyColumnLayout()
 
     RefreshGeneralWindowFields()
 end
@@ -177,9 +211,16 @@ local function RestoreWindowSize()
 
     settings.x = x
     settings.y = y
+    sidebarWidth = settings.sidebarWidth
+    emoteColumnWidth = settings.emoteColumnWidth
+    sidebarWidth, emoteColumnWidth, width = DistributeWindowWidth(width)
+    settings.sidebarWidth = sidebarWidth
+    settings.emoteColumnWidth = emoteColumnWidth
     settings.width = width
     settings.height = height
+    isApplyingColumnSize = true
     MainFrame:SetSize(width, height)
+    isApplyingColumnSize = false
 
     RefreshGeneralWindowFields()
 end
@@ -192,10 +233,15 @@ function MainWindow.ResetWindowPosition()
     settings.width = defaults.width
     settings.height = defaults.height
     settings.sidebarWidth = defaults.sidebarWidth
+    settings.emoteColumnWidth = defaults.emoteColumnWidth
+    sidebarWidth = defaults.sidebarWidth
+    emoteColumnWidth = defaults.emoteColumnWidth
 
     -- Resolve the default CENTER anchor using the restored full-size window.
     -- Otherwise its previous dimensions shift the position until a second reset.
+    isApplyingColumnSize = true
     MainFrame:SetSize(defaults.width, defaults.height)
+    isApplyingColumnSize = false
     RestoreWindowPosition()
 
     if isWindowCollapsed then
@@ -206,18 +252,15 @@ function MainWindow.ResetWindowPosition()
     RefreshGeneralWindowFields()
 end
 
-function MainWindow.ApplySidebarWidth(width)
+ApplyColumnLayout = function()
     if not MainFrame or not CategorySidebar or not CategoryScrollChild
         or not ScrollFrame or not ScrollChild then
         return
     end
 
-    local requestedWidth = math.floor(tonumber(width) or defaults.sidebarWidth)
-    sidebarWidth = math.max(
-        minimumSidebarWidth,
-        math.min(GetMaximumSidebarWidth(MainFrame:GetWidth()), requestedWidth)
-    )
     settings.sidebarWidth = sidebarWidth
+    settings.emoteColumnWidth = emoteColumnWidth
+    settings.width = sidebarWidth + emoteColumnWidth + columnChromeWidth
 
     CategorySidebar:SetWidth(sidebarWidth)
     CategoryScrollChild:SetWidth(sidebarWidth - 7)
@@ -230,15 +273,38 @@ function MainWindow.ApplySidebarWidth(width)
     ScrollFrame:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", sidebarWidth + 10, -40)
     ScrollFrame:SetPoint("BOTTOMRIGHT", MainFrame, "BOTTOMRIGHT", -25, 10)
 
-    local contentWidth = math.max(MainFrame:GetWidth() - sidebarWidth - 35, 1)
-    ScrollChild:SetWidth(contentWidth)
+    ScrollChild:SetWidth(emoteColumnWidth)
 
     for _, button in ipairs(buttonsPool) do
-        button:SetWidth(math.max(contentWidth - 5, 1))
+        button:SetWidth(math.max(emoteColumnWidth - 5, 1))
     end
 
-    MainWindow.UpdateMenu()
     RefreshGeneralWindowFields()
+end
+
+local function ApplyExplicitColumnWidths(left, right)
+    sidebarWidth = ClampColumnWidth(
+        left, minimumSidebarWidth, maximumSidebarWidth, defaults.sidebarWidth
+    )
+    emoteColumnWidth = ClampColumnWidth(
+        right,
+        minimumEmoteColumnWidth,
+        maximumEmoteColumnWidth,
+        defaults.emoteColumnWidth
+    )
+    local totalWidth = sidebarWidth + emoteColumnWidth + columnChromeWidth
+    isApplyingColumnSize = true
+    MainFrame:SetWidth(totalWidth)
+    isApplyingColumnSize = false
+    ApplyColumnLayout()
+end
+
+function MainWindow.ApplySidebarWidth(width)
+    ApplyExplicitColumnWidths(width, emoteColumnWidth)
+end
+
+function MainWindow.ApplyEmoteColumnWidth(width)
+    ApplyExplicitColumnWidths(sidebarWidth, width)
 end
 
 function MainWindow.ApplyMovementLock()
@@ -405,6 +471,19 @@ function MainWindow.RefreshFont(settingKey, fontName)
         if not ApplyFont(button.Text, fontName, fontSize, buttonTextColor, true) then
             applied = false
         end
+        if settingKey == "categoryFont" then
+            for _, outlineText in ipairs(button.TextOutline) do
+                if not ApplyFont(
+                    outlineText,
+                    fontName,
+                    fontSize,
+                    settings.categoryHighlightColor,
+                    true
+                ) then
+                    applied = false
+                end
+            end
+        end
     end
 
     return applied
@@ -415,7 +494,8 @@ function MainWindow.ApplyAppearance()
         return
     end
 
-    local background = settings.backgroundColor
+    local categoryBackground = settings.categoryBackgroundColor
+    local emoteBackground = settings.emoteBackgroundColor
     local border = settings.borderColor
     local backdrop = {
         bgFile = "Interface\\ChatFrame\\ChatFrameBackground"
@@ -432,17 +512,17 @@ function MainWindow.ApplyAppearance()
 
     MainFrame:SetBackdrop(backdrop)
     MainFrame:SetBackdropColor(
-        background.r,
-        background.g,
-        background.b,
+        emoteBackground.r,
+        emoteBackground.g,
+        emoteBackground.b,
         settings.backgroundOpacity
     )
     MainFrame:SetBackdropBorderColor(border.r, border.g, border.b, 1)
 
     CategorySidebar:SetBackdropColor(
-        background.r,
-        background.g,
-        background.b,
+        categoryBackground.r,
+        categoryBackground.g,
+        categoryBackground.b,
         settings.backgroundOpacity
     )
 
@@ -464,6 +544,14 @@ function MainWindow.ApplyAppearance()
             settings.categoryFontSize,
             settings.categoryTextColor
         )
+        for _, outlineText in ipairs(button.TextOutline) do
+            ApplyFont(
+                outlineText,
+                settings.categoryFont,
+                settings.categoryFontSize,
+                settings.categoryHighlightColor
+            )
+        end
     end
 
     for _, button in ipairs(buttonsPool) do
@@ -557,6 +645,9 @@ function MainWindow.ApplyCategoryHighlight(button, isSelected)
     for _, edge in pairs(button.SelectionOutline) do
         edge:Hide()
     end
+    for _, outlineText in ipairs(button.TextOutline) do
+        outlineText:Hide()
+    end
 
     button.Text:SetShadowColor(
         button.defaultShadowR,
@@ -566,7 +657,9 @@ function MainWindow.ApplyCategoryHighlight(button, isSelected)
     )
     button.Text:SetShadowOffset(button.defaultShadowX, button.defaultShadowY)
 
-    if not isSelected then
+    local strength = isSelected and 1 or (button.isHovered and 0.5 or 0)
+
+    if strength == 0 then
         return
     end
 
@@ -574,27 +667,49 @@ function MainWindow.ApplyCategoryHighlight(button, isSelected)
     local effect = settings.categoryHighlightEffect
 
     if effect == "background" then
-        button.Selection:SetColorTexture(color.r, color.g, color.b, 0.85)
+        button.Selection:SetColorTexture(
+            color.r,
+            color.g,
+            color.b,
+            0.85 * strength
+        )
         button.Selection:Show()
     elseif effect == "outline" then
         local thickness = settings.categoryHighlightThickness
-
-        button.SelectionOutline.top:SetHeight(thickness)
-        button.SelectionOutline.bottom:SetHeight(thickness)
-        button.SelectionOutline.left:SetWidth(thickness)
-        button.SelectionOutline.right:SetWidth(thickness)
-
-        for _, edge in pairs(button.SelectionOutline) do
-            edge:SetColorTexture(color.r, color.g, color.b, 1)
-            edge:Show()
+        for _, outlineText in ipairs(button.TextOutline) do
+            outlineText:ClearAllPoints()
+            outlineText:SetPoint(
+                "LEFT",
+                button.Text,
+                "LEFT",
+                outlineText.offsetX * thickness,
+                outlineText.offsetY * thickness
+            )
+            outlineText:SetPoint(
+                "RIGHT",
+                button.Text,
+                "RIGHT",
+                outlineText.offsetX * thickness,
+                outlineText.offsetY * thickness
+            )
+            outlineText:SetTextColor(color.r, color.g, color.b, strength)
+            outlineText:Show()
         end
     elseif effect == "underline" then
         button.SelectionUnderline:SetHeight(settings.categoryHighlightThickness)
-        button.SelectionUnderline:SetColorTexture(color.r, color.g, color.b, 1)
+        button.SelectionUnderline:SetColorTexture(
+            color.r, color.g, color.b, strength
+        )
         button.SelectionUnderline:Show()
     elseif effect == "shadow" then
-        button.Text:SetShadowColor(color.r, color.g, color.b, 1)
+        button.Text:SetShadowColor(color.r, color.g, color.b, strength)
         button.Text:SetShadowOffset(2, -2)
+    elseif effect == "separator" then
+        button.SelectionOutline.right:SetWidth(settings.categoryHighlightThickness)
+        button.SelectionOutline.right:SetColorTexture(
+            color.r, color.g, color.b, strength
+        )
+        button.SelectionOutline.right:Show()
     end
 end
 
@@ -619,6 +734,9 @@ local function UpdateCategorySidebar()
                 -visibleCount * categoryButtonHeight
             )
             button.Text:SetText(category.name)
+            for _, outlineText in ipairs(button.TextOutline) do
+                outlineText:SetText(category.name)
+            end
 
             local isSelected = categoryIndex == selectedCategoryIndex
             MainWindow.ApplyCategoryHighlight(button, isSelected)
@@ -802,6 +920,7 @@ function MainWindow.CreateMainWindow()
     settings = Database.GetSettings()
     selectedCategoryIndex = settings.selectedCategory
     sidebarWidth = settings.sidebarWidth
+    emoteColumnWidth = settings.emoteColumnWidth
     MainFrame = CreateFrame("Frame", "RPEmoteMenu", UIParent, "BackdropTemplate")
     MainFrame:SetSize(defaults.width, defaults.height)
     MainFrame:SetResizeBounds(minimumWidth, minimumHeight, maximumWidth, maximumHeight)
@@ -821,25 +940,17 @@ function MainWindow.CreateMainWindow()
     end)
 
     MainFrame:SetScript("OnSizeChanged", function(self, width)
-        if CategorySidebar and ScrollFrame and ScrollChild
-            and sidebarWidth > GetMaximumSidebarWidth(width) then
-            MainWindow.ApplySidebarWidth(sidebarWidth)
-            return
+        if isApplyingColumnSize then return end
+        sidebarWidth, emoteColumnWidth, width = DistributeWindowWidth(width)
+        settings.sidebarWidth = sidebarWidth
+        settings.emoteColumnWidth = emoteColumnWidth
+        settings.width = width
+        if math.abs(self:GetWidth() - width) > 0.5 then
+            isApplyingColumnSize = true
+            self:SetWidth(width)
+            isApplyingColumnSize = false
         end
-
-        local contentWidth = math.max(width - sidebarWidth - 35, 1)
-
-        if ScrollChild then
-            ScrollChild:SetWidth(contentWidth)
-        end
-
-        for _, button in ipairs(buttonsPool) do
-            button:SetWidth(math.max(contentWidth - 5, 1))
-        end
-
-        if ScrollFrame then
-            C_Timer.After(0, UpdateScrollIndicators)
-        end
+        if ApplyColumnLayout then ApplyColumnLayout() end
     end)
 
     local title = MainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -946,6 +1057,22 @@ function MainWindow.CreateMainWindow()
         button.Text:SetPoint("RIGHT", button, "RIGHT", -5, 0)
         button.Text:SetJustifyH("LEFT")
         button.Text:SetWordWrap(false)
+        button.TextOutline = {}
+        for _, offset in ipairs({
+            {-1, -1}, {-1, 0}, {-1, 1}, {0, -1},
+            {0, 1}, {1, -1}, {1, 0}, {1, 1}
+        }) do
+            local outlineText = button:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+            outlineText:SetPoint("LEFT", button.Text, "LEFT", offset[1], offset[2])
+            outlineText:SetPoint("RIGHT", button.Text, "RIGHT", offset[1], offset[2])
+            outlineText:SetJustifyH("LEFT")
+            outlineText:SetWordWrap(false)
+            outlineText:SetTextColor(1, 1, 1, 1)
+            outlineText.offsetX = offset[1]
+            outlineText.offsetY = offset[2]
+            outlineText:Hide()
+            button.TextOutline[#button.TextOutline + 1] = outlineText
+        end
         button.defaultShadowX, button.defaultShadowY = button.Text:GetShadowOffset()
         button.defaultShadowR,
             button.defaultShadowG,
@@ -958,22 +1085,28 @@ function MainWindow.CreateMainWindow()
             settings.categoryTextColor
         )
 
-        button:SetHighlightTexture(
-            "Interface\\QuestFrame\\UI-QuestTitleHighlight",
-            "ADD"
-        )
         button:SetScript("OnClick", function(self)
             MainWindow.SetSelectedCategory(self.categoryIndex)
             MainWindow.UpdateMenu()
         end)
         button:SetScript("OnEnter", function(self)
+            self.isHovered = true
+            MainWindow.ApplyCategoryHighlight(
+                self,
+                self.categoryIndex == selectedCategoryIndex
+            )
             if self.Text:IsTruncated() then
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                 GameTooltip:SetText(self.Text:GetText())
                 GameTooltip:Show()
             end
         end)
-        button:SetScript("OnLeave", function()
+        button:SetScript("OnLeave", function(self)
+            self.isHovered = false
+            MainWindow.ApplyCategoryHighlight(
+                self,
+                self.categoryIndex == selectedCategoryIndex
+            )
             GameTooltip:Hide()
         end)
         button:Hide()
@@ -986,7 +1119,7 @@ function MainWindow.CreateMainWindow()
     ScrollFrame:SetPoint("BOTTOMRIGHT", MainFrame, "BOTTOMRIGHT", -25, 10)
 
     ScrollChild = CreateFrame("Frame", nil, ScrollFrame)
-    ScrollChild:SetSize(math.max(defaults.width - sidebarWidth - 35, 1), 1)
+    ScrollChild:SetSize(emoteColumnWidth, 1)
     ScrollFrame:SetScrollChild(ScrollChild)
 
     ScrollTopIndicator = MainFrame:CreateTexture(nil, "OVERLAY")
@@ -1076,6 +1209,7 @@ function MainWindow.ApplyProfileSettings()
     settings = Database.GetSettings()
     selectedCategoryIndex = settings.selectedCategory
     sidebarWidth = settings.sidebarWidth
+    emoteColumnWidth = settings.emoteColumnWidth
 
     if not MainFrame then
         return
