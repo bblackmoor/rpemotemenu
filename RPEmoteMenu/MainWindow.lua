@@ -437,56 +437,68 @@ function MainWindow.ApplyFadeSettings()
     end
 end
 
-function MainWindow.RefreshFont(settingKey, fontName)
-    if not MainFrame or settings[settingKey] ~= fontName then
-        return false
-    end
-
-    local buttons
-    local fontSize
-    local textColor
-
-    if settingKey == "categoryFont" then
-        buttons = categoryButtons
-        fontSize = settings.categoryFontSize
-        textColor = settings.categoryTextColor
-    elseif settingKey == "emoteFont" then
-        buttons = buttonsPool
-        fontSize = settings.emoteFontSize
-        textColor = settings.emoteTextColor
-    else
+function MainWindow.RefreshFontDisplays()
+    if not MainFrame then
         return false
     end
 
     local applied = true
+    categoryButtonHeight = math.max(24, settings.categoryFontSize + 10)
+    emoteButtonHeight = math.max(20, settings.emoteFontSize + 8)
 
-    for _, button in ipairs(buttons) do
-        local buttonTextColor = textColor
+    for _, button in ipairs(categoryButtons) do
+        button:SetHeight(categoryButtonHeight)
+        local textColor = button.categoryIndex == selectedCategoryIndex
+            and settings.selectedCategoryTextColor
+            or settings.categoryTextColor
 
-        if settingKey == "categoryFont"
-            and button.categoryIndex == selectedCategoryIndex then
-            buttonTextColor = settings.selectedCategoryTextColor
-        end
-
-        if not ApplyFont(button.Text, fontName, fontSize, buttonTextColor, true) then
+        if not ApplyFont(
+            button.Text,
+            settings.categoryFont,
+            settings.categoryFontSize,
+            textColor,
+            true
+        ) then
             applied = false
         end
-        if settingKey == "categoryFont" then
-            for _, outlineText in ipairs(button.TextOutline) do
-                if not ApplyFont(
-                    outlineText,
-                    fontName,
-                    fontSize,
-                    settings.categoryHighlightColor,
-                    true
-                ) then
-                    applied = false
-                end
+
+        for _, outlineText in ipairs(button.TextOutline) do
+            if not ApplyFont(
+                outlineText,
+                settings.categoryFont,
+                settings.categoryFontSize,
+                settings.categoryHighlightColor,
+                true
+            ) then
+                applied = false
             end
         end
     end
 
+    for _, button in ipairs(buttonsPool) do
+        button:SetHeight(emoteButtonHeight)
+        if not ApplyFont(
+            button.Text,
+            settings.emoteFont,
+            settings.emoteFontSize,
+            settings.emoteTextColor,
+            true
+        ) then
+            applied = false
+        end
+    end
+
+    MainWindow.UpdateMenu()
+
+    if addon.Settings and addon.Settings.RefreshFontControls then
+        addon.Settings.RefreshFontControls()
+    end
+
     return applied
+end
+
+function MainWindow.RefreshFont()
+    return MainWindow.RefreshFontDisplays()
 end
 
 function MainWindow.ApplyAppearance()
@@ -533,39 +545,8 @@ function MainWindow.ApplyAppearance()
         SidebarDivider:Show()
     end
 
-    categoryButtonHeight = math.max(24, settings.categoryFontSize + 10)
-    emoteButtonHeight = math.max(20, settings.emoteFontSize + 8)
-
-    for _, button in ipairs(categoryButtons) do
-        button:SetHeight(categoryButtonHeight)
-        ApplyFont(
-            button.Text,
-            settings.categoryFont,
-            settings.categoryFontSize,
-            settings.categoryTextColor
-        )
-        for _, outlineText in ipairs(button.TextOutline) do
-            ApplyFont(
-                outlineText,
-                settings.categoryFont,
-                settings.categoryFontSize,
-                settings.categoryHighlightColor
-            )
-        end
-    end
-
-    for _, button in ipairs(buttonsPool) do
-        button:SetHeight(emoteButtonHeight)
-        ApplyFont(
-            button.Text,
-            settings.emoteFont,
-            settings.emoteFontSize,
-            settings.emoteTextColor
-        )
-    end
-
+    MainWindow.RefreshFontDisplays()
     MainWindow.ApplyFadeSettings()
-    MainWindow.UpdateMenu()
 end
 
 -- MENU RENDERING

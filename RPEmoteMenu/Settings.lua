@@ -821,6 +821,12 @@ local function CreateFontSetting(parent, labelText, settingKey, x, y)
 
     selector.RefreshValue = function(self)
         local fontName = settings[settingKey]
+        local fontSizeKey = settingKey == "categoryFont"
+            and "categoryFontSize"
+            or "emoteFontSize"
+        local textColorKey = settingKey == "categoryFont"
+            and "categoryTextColor"
+            or "emoteTextColor"
         self:OverrideText(fontName)
 
         local previewText = self.Text
@@ -830,13 +836,21 @@ local function CreateFontSetting(parent, labelText, settingKey, x, y)
         end
 
         if previewText and type(previewText.SetFont) == "function" then
-            local _, previewSize, previewFlags = previewText:GetFont()
+            local _, _, previewFlags = previewText:GetFont()
             local fontPath = addon.GetFontPath(fontName)
+            local previewSize = settings[fontSizeKey] or 12
+            local previewColor = settings[textColorKey]
 
-            if not previewText:SetFont(fontPath, previewSize or 12, previewFlags or "") then
-                previewText:SetFont(STANDARD_TEXT_FONT, previewSize or 12, previewFlags or "")
+            if not previewText:SetFont(fontPath, previewSize, previewFlags or "") then
+                previewText:SetFont(STANDARD_TEXT_FONT, previewSize, previewFlags or "")
             end
 
+            previewText:SetTextColor(
+                previewColor.r,
+                previewColor.g,
+                previewColor.b,
+                1
+            )
             previewText:SetText(fontName)
         end
     end
@@ -860,9 +874,7 @@ local function CreateFontSetting(parent, labelText, settingKey, x, y)
                             return
                         end
 
-                        selector:RefreshValue()
-                        MainWindow.ApplyAppearance()
-                        MainWindow.RefreshFont(settingKey, fontName)
+                        MainWindow.RefreshFontDisplays()
                     end
 
                     RefreshSelection()
@@ -883,8 +895,7 @@ local function CreateFontSetting(parent, labelText, settingKey, x, y)
                         }) do
                             C_Timer.After(delay, function()
                                 if selectionGeneration == currentGeneration then
-                                    selector:RefreshValue()
-                                    MainWindow.RefreshFont(settingKey, fontName)
+                                    MainWindow.RefreshFontDisplays()
                                 end
                             end)
                         end
@@ -970,7 +981,7 @@ local function CreateAppearanceSettingsPanel()
         function() return settings.categoryFontSize end,
         function(value)
             settings.categoryFontSize = value
-            MainWindow.ApplyAppearance()
+            MainWindow.RefreshFontDisplays()
         end,
         "px"
     )
@@ -984,7 +995,7 @@ local function CreateAppearanceSettingsPanel()
         function() return settings.emoteFontSize end,
         function(value)
             settings.emoteFontSize = value
-            MainWindow.ApplyAppearance()
+            MainWindow.RefreshFontDisplays()
         end,
         "px"
     )
@@ -994,7 +1005,7 @@ local function CreateAppearanceSettingsPanel()
         function() return settings.categoryTextColor end,
         function(value)
             settings.categoryTextColor = value
-            MainWindow.ApplyAppearance()
+            MainWindow.RefreshFontDisplays()
         end
     )
 
@@ -1003,7 +1014,7 @@ local function CreateAppearanceSettingsPanel()
         function() return settings.selectedCategoryTextColor end,
         function(value)
             settings.selectedCategoryTextColor = value
-            MainWindow.ApplyAppearance()
+            MainWindow.RefreshFontDisplays()
         end
     )
 
@@ -1012,7 +1023,7 @@ local function CreateAppearanceSettingsPanel()
         function() return settings.emoteTextColor end,
         function(value)
             settings.emoteTextColor = value
-            MainWindow.ApplyAppearance()
+            MainWindow.RefreshFontDisplays()
         end
     )
 
@@ -1283,6 +1294,12 @@ local function CreateAppearanceSettingsPanel()
         "inactiveOpacity"
     }
 
+    local function RefreshFontControls()
+        settings = Database.GetSettings()
+        controls.categoryFont:RefreshValue()
+        controls.emoteFont:RefreshValue()
+    end
+
     local function RefreshControls()
         for key, control in pairs(controls) do
             if control.RefreshValue then
@@ -1312,7 +1329,9 @@ local function CreateAppearanceSettingsPanel()
     end)
 
     container.RefreshControls = RefreshControls
+    container.RefreshFontControls = RefreshFontControls
     container.appearanceControls = controls
+    AddonSettings.RefreshFontControls = RefreshFontControls
     container:SetScript("OnShow", RefreshControls)
     RefreshControls()
     return container
