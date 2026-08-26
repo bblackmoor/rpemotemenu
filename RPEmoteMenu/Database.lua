@@ -416,6 +416,35 @@ function Database.DeleteProfile(profileName)
     return true
 end
 
+function Database.ReplaceCustomProfiles(customProfiles, activeProfiles)
+    local defaultProfile = RPEmoteMenuDB.profiles[DEFAULT_PROFILE_NAME]
+    local profiles = {
+        [DEFAULT_PROFILE_NAME] = defaultProfile
+    }
+
+    for profileName, categories in pairs(customProfiles or {}) do
+        profiles[profileName] = {
+            categories = CopyCategories(categories)
+        }
+    end
+
+    local restoredActiveProfiles = {}
+    for characterKey, profileName in pairs(activeProfiles or {}) do
+        if profileName == DEFAULT_PROFILE_NAME or profiles[profileName] then
+            restoredActiveProfiles[characterKey] = profileName
+        end
+    end
+
+    local characterKey = Database.GetCharacterKey()
+    if characterKey and not restoredActiveProfiles[characterKey] then
+        restoredActiveProfiles[characterKey] = DEFAULT_PROFILE_NAME
+    end
+
+    RPEmoteMenuDB.profiles = profiles
+    RPEmoteMenuDB.activeProfiles = restoredActiveProfiles
+    RefreshProfileViews()
+end
+
 function Database.InitializeDatabase()
     RPEmoteMenuDB = type(RPEmoteMenuDB) == "table" and RPEmoteMenuDB or {}
 
