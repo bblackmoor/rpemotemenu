@@ -8,6 +8,7 @@ local JSON = addon.JSON
 local FORMAT_NAME = "RPEmoteMenu"
 local FORMAT_VERSION = 2
 local LEGACY_FORMAT_VERSION = 1
+local DEFAULT_PROFILE_NAME = "Default"
 local MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
 local MAX_PROFILE_NAME_LENGTH = 64
 local MAX_CATEGORY_NAME_LENGTH = 128
@@ -586,6 +587,11 @@ end
 
 function Serialization.ExportProfile()
     local profileName = Database.GetActiveProfileName()
+
+    if string.lower(profileName) == string.lower(DEFAULT_PROFILE_NAME) then
+        return nil, "The Default profile is local-only and cannot be exported."
+    end
+
     local result = ExportProfileData(profileName, Database.GetProfile(profileName))
     result.format = FORMAT_NAME
     result.version = FORMAT_VERSION
@@ -596,11 +602,13 @@ end
 
 function Serialization.ExportAllProfiles()
     local profiles = JSON.Array()
-    for index, profileName in ipairs(Database.GetProfileNames()) do
-        profiles[index] = ExportProfileData(
-            profileName,
-            Database.GetProfile(profileName)
-        )
+    for _, profileName in ipairs(Database.GetProfileNames()) do
+        if string.lower(profileName) ~= string.lower(DEFAULT_PROFILE_NAME) then
+            profiles[#profiles + 1] = ExportProfileData(
+                profileName,
+                Database.GetProfile(profileName)
+            )
+        end
     end
 
     return JSON.Encode({
@@ -731,6 +739,10 @@ function Serialization.ImportProfileAsNew(text)
     local imported, errorMessage = Serialization.Decode(text, "profile")
     if not imported then return false, errorMessage end
 
+    if string.lower(imported.name) == string.lower(DEFAULT_PROFILE_NAME) then
+        return false, "Default is a reserved local profile and cannot be imported."
+    end
+
     local names = Database.AddImportedProfiles({imported})
     return true, names[1], imported.name
 end
@@ -740,6 +752,17 @@ function Serialization.ImportAllProfiles(text)
     local imported, errorMessage = Serialization.Decode(text, "profiles")
     if not imported then return false, errorMessage end
 
-    local names = Database.AddImportedProfiles(imported.profiles)
-    return true, #names, names
+    local customProfiles = {}
+    local skippedDefaultCount = 0
+
+    for _, profile in ipairs(imported.profiles) do
+        if string.lower(profile.name) == string.lower(DEFAULT_PROFILE_NAME) then
+            skippedDefaultCount = skippedDefaultCount + 1
+        else
+            customProfiles[#customProfiles + 1] = profile
+        end
+    end
+
+    local names = Database.AddImportedProfiles(customProfiles)
+    return true, #names, names, skippedDefaultCount
 end

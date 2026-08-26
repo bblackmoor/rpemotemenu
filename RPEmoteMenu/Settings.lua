@@ -310,6 +310,7 @@ local function GetExchangeDialog()
         local success
         local result
         local sourceProfileName
+        local skippedDefaultCount
 
         if dataType == "profile" then
             success, result, sourceProfileName = Serialization.ImportProfileAsNew(importText)
@@ -319,7 +320,8 @@ local function GetExchangeDialog()
                 importText
             )
         else
-            success, result = Serialization.ImportAllProfiles(importText)
+            success, result, _, skippedDefaultCount =
+                Serialization.ImportAllProfiles(importText)
         end
 
         if not success then
@@ -341,7 +343,17 @@ local function GetExchangeDialog()
             SetStatus("Imported category " .. result .. ".")
         else
             local profileLabel = result == 1 and "profile" or "profiles"
-            SetStatus("Added " .. result .. " " .. profileLabel .. ".")
+            local message = "Added " .. result .. " " .. profileLabel .. "."
+
+            if skippedDefaultCount and skippedDefaultCount > 0 then
+                local skippedLabel = skippedDefaultCount == 1
+                    and "reserved Default profile"
+                    or "reserved Default profiles"
+                message = message .. " Skipped " .. skippedDefaultCount
+                    .. " " .. skippedLabel .. "."
+            end
+
+            SetStatus(message)
         end
     end
 
@@ -468,10 +480,10 @@ local function GetExchangeDialog()
         self.categoryIndex = nil
         self.profileName = nil
         self.onProfileImported = nil
-        title:SetText("Export All Profiles")
+        title:SetText("Export Custom Profiles")
         instructions:SetText(
-            "Copy this JSON to save every profile. The addon does not add character "
-            .. "names, realms, or character assignments to the export."
+            "Copy this JSON to save every custom profile. The local-only Default "
+            .. "profile and character assignments are not included."
         )
         actionButton:SetText("Select All")
         SetStatus("")
@@ -491,12 +503,13 @@ local function GetExchangeDialog()
         self.categoryIndex = nil
         self.profileName = nil
         self.onProfileImported = nil
-        title:SetText("Import Profiles")
+        title:SetText("Import Custom Profiles")
         instructions:SetText(
-            "Paste an all-profiles export below. Importing only adds profiles; it "
-            .. "does not replace, activate, or assign them to characters."
+            "Paste a custom-profiles export below. Importing only adds profiles; it "
+            .. "does not replace, activate, or assign them to characters. Any Default "
+            .. "profile in an older export is skipped."
         )
-        actionButton:SetText("Import Profiles")
+        actionButton:SetText("Import Custom Profiles")
         SetStatus("")
         editBox:SetText("")
         scrollFrame:SetVerticalScroll(0)
@@ -548,7 +561,7 @@ local function CreateAboutPanel()
     description:SetJustifyH("LEFT")
     description:SetText(
         "A customizable roleplaying emote menu with profiles, targeted " ..
-        "commands, category and profile sharing, all-profile exports, and " ..
+        "commands, category and custom-profile sharing, and " ..
         "per-profile fonts, colors, layout, opacity, and inactivity fading."
     )
 
@@ -902,13 +915,26 @@ local function CreateAppearanceSettingsPanel()
     )
     description:SetTextColor(0.8, 0.8, 0.8)
 
-    local typographyHeading = panel:CreateFontString(
+    local categoryPaneHeading = panel:CreateFontString(
         nil,
         "OVERLAY",
         "GameFontNormal"
     )
-    typographyHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -82)
-    typographyHeading:SetText("Typography")
+    categoryPaneHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -82)
+    categoryPaneHeading:SetText("Category Pane")
+
+    local emotePaneHeading = panel:CreateFontString(
+        nil,
+        "OVERLAY",
+        "GameFontNormal"
+    )
+    emotePaneHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 330, -82)
+    emotePaneHeading:SetText("Emote Pane")
+
+    local columnDivider = panel:CreateTexture(nil, "ARTWORK")
+    columnDivider:SetColorTexture(0.35, 0.35, 0.35, 0.45)
+    columnDivider:SetPoint("TOPLEFT", panel, "TOPLEFT", 314, -80)
+    columnDivider:SetSize(1, 278)
 
     controls.categoryFont = CreateFontSetting(
         panel, "Category font", "categoryFont", 20, -112
@@ -951,12 +977,8 @@ local function CreateAppearanceSettingsPanel()
     )
     fontLoadingNote:SetTextColor(0.7, 0.7, 0.7)
 
-    local colorsHeading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    colorsHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -190)
-    colorsHeading:SetText("Text and Selection")
-
     controls.categoryTextColor = CreateColorSetting(
-        panel, "Category text", "categoryTextColor", 20, -218,
+        panel, "Category text", "categoryTextColor", 20, -200,
         function() return settings.categoryTextColor end,
         function(value)
             settings.categoryTextColor = value
@@ -965,7 +987,7 @@ local function CreateAppearanceSettingsPanel()
     )
 
     controls.selectedCategoryTextColor = CreateColorSetting(
-        panel, "Selected Category Text", "selectedCategoryTextColor", 230, -218,
+        panel, "Selected category text", "selectedCategoryTextColor", 165, -200,
         function() return settings.selectedCategoryTextColor end,
         function(value)
             settings.selectedCategoryTextColor = value
@@ -974,7 +996,7 @@ local function CreateAppearanceSettingsPanel()
     )
 
     controls.emoteTextColor = CreateColorSetting(
-        panel, "Emote-label text", "emoteTextColor", 440, -218,
+        panel, "Emote-label text", "emoteTextColor", 330, -200,
         function() return settings.emoteTextColor end,
         function(value)
             settings.emoteTextColor = value
@@ -987,7 +1009,7 @@ local function CreateAppearanceSettingsPanel()
         "Selected Category Highlight",
         "categoryHighlightColor",
         20,
-        -273,
+        -260,
         function() return settings.categoryHighlightColor end,
         function(value)
             settings.categoryHighlightColor = value
@@ -1000,7 +1022,7 @@ local function CreateAppearanceSettingsPanel()
         "OVERLAY",
         "GameFontHighlight"
     )
-    highlightEffectLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 230, -273)
+    highlightEffectLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 165, -260)
     highlightEffectLabel:SetText("Selection effect")
 
     local highlightEffectSelector = CreateFrame(
@@ -1009,14 +1031,14 @@ local function CreateAppearanceSettingsPanel()
         panel,
         "WowStyle1DropdownTemplate"
     )
-    highlightEffectSelector:SetWidth(190)
-    highlightEffectSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 230, -294)
+    highlightEffectSelector:SetWidth(135)
+    highlightEffectSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 165, -281)
     highlightEffectSelector:SetDefaultText("Background")
     highlightEffectSelector.settingKey = "categoryHighlightEffect"
     controls.categoryHighlightEffect = highlightEffectSelector
 
     controls.categoryHighlightThickness = CreateNumberSetting(
-        panel, "Thickness", "categoryHighlightThickness", 440, -273, 1, 6,
+        panel, "Thickness", "categoryHighlightThickness", 20, -320, 1, 6,
         function() return settings.categoryHighlightThickness end,
         function(value)
             settings.categoryHighlightThickness = value
@@ -1060,11 +1082,11 @@ local function CreateAppearanceSettingsPanel()
     end)
 
     local windowHeading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    windowHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -327)
-    windowHeading:SetText("Window")
+    windowHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -380)
+    windowHeading:SetText("Window Appearance")
 
     controls.backgroundColor = CreateColorSetting(
-        panel, "Background", "backgroundColor", 20, -357,
+        panel, "Background", "backgroundColor", 20, -410,
         function() return settings.backgroundColor end,
         function(value)
             settings.backgroundColor = value
@@ -1073,7 +1095,7 @@ local function CreateAppearanceSettingsPanel()
     )
 
     controls.borderColor = CreateColorSetting(
-        panel, "Border", "borderColor", 230, -357,
+        panel, "Border", "borderColor", 230, -410,
         function() return settings.borderColor end,
         function(value)
             settings.borderColor = value
@@ -1082,7 +1104,7 @@ local function CreateAppearanceSettingsPanel()
     )
 
     local borderLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    borderLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 440, -357)
+    borderLabel:SetPoint("TOPLEFT", panel, "TOPLEFT", 440, -410)
     borderLabel:SetText("Border style")
 
     local borderSelector = CreateFrame(
@@ -1092,7 +1114,7 @@ local function CreateAppearanceSettingsPanel()
         "WowStyle1DropdownTemplate"
     )
     borderSelector:SetWidth(170)
-    borderSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 440, -378)
+    borderSelector:SetPoint("TOPLEFT", panel, "TOPLEFT", 440, -431)
     borderSelector:SetDefaultText("Thin")
     borderSelector.settingKey = "borderStyle"
     controls.borderStyle = borderSelector
@@ -1120,11 +1142,11 @@ local function CreateAppearanceSettingsPanel()
     borderSelector:SetupMenu(BuildBorderMenu)
 
     local opacityHeading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    opacityHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -423)
+    opacityHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -478)
     opacityHeading:SetText("Opacity and Fading")
 
     controls.backgroundOpacity = CreateNumberSetting(
-        panel, "Background opacity", "backgroundOpacity", 230, -450, 0, 100,
+        panel, "Background opacity", "backgroundOpacity", 230, -506, 0, 100,
         function() return settings.backgroundOpacity * 100 end,
         function(value)
             settings.backgroundOpacity = value / 100
@@ -1134,7 +1156,7 @@ local function CreateAppearanceSettingsPanel()
     )
 
     controls.windowOpacity = CreateNumberSetting(
-        panel, "Active window opacity", "windowOpacity", 20, -450, 10, 100,
+        panel, "Active window opacity", "windowOpacity", 20, -506, 10, 100,
         function() return settings.windowOpacity * 100 end,
         function(value)
             settings.windowOpacity = value / 100
@@ -1151,7 +1173,7 @@ local function CreateAppearanceSettingsPanel()
     local fadeCheckbox = CreateCheckbox(
         panel,
         "Fade the menu when inactive",
-        -507,
+        -563,
         function() return settings.fadeEnabled end,
         function(value)
             settings.fadeEnabled = value
@@ -1167,7 +1189,7 @@ local function CreateAppearanceSettingsPanel()
     controls.fadeEnabled = fadeCheckbox
 
     controls.fadeDelay = CreateNumberSetting(
-        panel, "Fade after", "fadeDelay", 20, -552, 0, 60,
+        panel, "Fade after", "fadeDelay", 20, -608, 0, 60,
         function() return settings.fadeDelay end,
         function(value)
             settings.fadeDelay = value
@@ -1177,7 +1199,7 @@ local function CreateAppearanceSettingsPanel()
     )
 
     controls.inactiveOpacity = CreateNumberSetting(
-        panel, "Inactive opacity", "inactiveOpacity", 230, -552, 10, 100,
+        panel, "Inactive opacity", "inactiveOpacity", 230, -608, 10, 100,
         function() return settings.inactiveOpacity * 100 end,
         function(value)
             settings.inactiveOpacity = math.min(
@@ -1209,8 +1231,8 @@ local function CreateAppearanceSettingsPanel()
 
     local resetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     resetButton:SetSize(170, 24)
-    resetButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 440, -574)
-    resetButton:SetText("Reset Appearance")
+    resetButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 440, -630)
+    resetButton:SetText("Restore Built-in Appearance")
     resetButton.settingKey = "resetAppearance"
     controls.resetAppearance = resetButton
 
@@ -1259,7 +1281,6 @@ local function CreateAppearanceSettingsPanel()
             end
         end
 
-        MainWindow.SetSelectedCategory(addon.DefaultSettings.selectedCategory)
         RefreshControls()
         MainWindow.ApplyAppearance()
     end)
@@ -1428,15 +1449,28 @@ local function CreateGeneralSettingsPanel()
     local resetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     resetButton:SetSize(290, 24)
     resetButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -335)
-    resetButton:SetText("Reset Window Position, Size, and Column")
+    resetButton:SetText("Reset Window Layout")
     resetButton:SetScript("OnClick", MainWindow.ResetWindowPosition)
 
+    StaticPopupDialogs["RPEMOTEMENU_RESTORE_ALL_CATEGORIES"] = {
+        text = "Replace every category and emote in the current profile with the built-in set?\n\nThis cannot be undone.",
+        button1 = "Restore",
+        button2 = CANCEL or "Cancel",
+        OnAccept = Database.ResetAllCategoriesToDefaults,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+        preferredIndex = 3
+    }
+
     resetAllCategoriesButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    resetAllCategoriesButton:SetSize(260, 24)
+    resetAllCategoriesButton:SetSize(290, 24)
     resetAllCategoriesButton:SetPoint("TOPLEFT", resetButton, "BOTTOMLEFT", 0, -10)
-    resetAllCategoriesButton:SetText("Reset All Categories and Emotes")
+    resetAllCategoriesButton:SetText("Restore All Built-in Categories")
     resetAllCategoriesButton:SetEnabled(Database.CanEditActiveProfile())
-    resetAllCategoriesButton:SetScript("OnClick", Database.ResetAllCategoriesToDefaults)
+    resetAllCategoriesButton:SetScript("OnClick", function()
+        StaticPopup_Show("RPEMOTEMENU_RESTORE_ALL_CATEGORIES")
+    end)
 
     return panel
 end
@@ -1453,14 +1487,14 @@ local function CreateImportExportSettingsPanel()
     description:SetWidth(620)
     description:SetJustifyH("LEFT")
     description:SetText(
-        "Save or transfer every profile at once. Individual profiles and categories "
-        .. "can still be shared from their respective pages."
+        "Save or transfer custom profiles. Default is a built-in, local-only profile "
+        .. "and is never imported or exported as a profile."
     )
     description:SetTextColor(0.8, 0.8, 0.8)
 
     local profilesHeading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     profilesHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -100)
-    profilesHeading:SetText("All Profiles")
+    profilesHeading:SetText("Custom Profiles")
 
     local profilesDescription = panel:CreateFontString(
         nil,
@@ -1471,15 +1505,16 @@ local function CreateImportExportSettingsPanel()
     profilesDescription:SetWidth(620)
     profilesDescription:SetJustifyH("LEFT")
     profilesDescription:SetText(
-        "Each profile includes its window settings, appearance, categories, and emotes. "
-        .. "The addon does not add character names, realms, or character assignments."
+        "Each custom profile includes its window settings, appearance, categories, "
+        .. "and emotes. The addon does not add character names, realms, or character "
+        .. "assignments to exports."
     )
     profilesDescription:SetTextColor(0.8, 0.8, 0.8)
 
     local exportButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     exportButton:SetSize(160, 24)
     exportButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -166)
-    exportButton:SetText("Export All Profiles")
+    exportButton:SetText("Export Custom Profiles")
     exportButton:SetScript("OnClick", function()
         GetExchangeDialog():OpenAllProfilesExport()
     end)
@@ -1487,7 +1522,7 @@ local function CreateImportExportSettingsPanel()
     local importButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     importButton:SetSize(160, 24)
     importButton:SetPoint("LEFT", exportButton, "RIGHT", 10, 0)
-    importButton:SetText("Import Profiles")
+    importButton:SetText("Import Custom Profiles")
     importButton:SetScript("OnClick", function()
         GetExchangeDialog():OpenAllProfilesImport()
     end)
@@ -1497,10 +1532,10 @@ local function CreateImportExportSettingsPanel()
     importNote:SetWidth(620)
     importNote:SetJustifyH("LEFT")
     importNote:SetText(
-        "Importing only adds profiles. It does not replace existing profiles, change "
-        .. "the current profile, or assign imported profiles to characters. Name conflicts "
-        .. "are renamed automatically. Review profile names and custom emote text before "
-        .. "sharing, since those are exported exactly as written."
+        "Importing only adds custom profiles. It does not replace existing profiles, "
+        .. "change the current profile, or assign profiles to characters. Default entries "
+        .. "from older exports are skipped, and name conflicts are renamed automatically. "
+        .. "Review profile names and custom emote text before sharing."
     )
     importNote:SetTextColor(0.7, 0.7, 0.7)
 
@@ -1520,8 +1555,9 @@ local function CreateProfilesSettingsPanel()
     description:SetJustifyH("LEFT")
     description:SetText(
         "Choose a profile for this character, create or copy an editable profile, " ..
-        "or import a new one. Default's settings are customizable, but its categories " ..
-        "cannot be edited and the profile cannot be renamed or deleted."
+        "or import a new one. Default's settings are customizable and persistent, but " ..
+        "local-only. Its categories cannot be edited, and the profile cannot be " ..
+        "imported, exported, renamed, or deleted."
     )
     description:SetTextColor(0.8, 0.8, 0.8)
 
@@ -1566,6 +1602,7 @@ local function CreateProfilesSettingsPanel()
         copyButton:SetEnabled(validNewProfileName ~= nil)
         renameButton:SetEnabled(editable)
         deleteButton:SetEnabled(editable)
+        exportProfileButton:SetEnabled(editable)
         importProfileButton:SetEnabled(true)
     end
 
@@ -1833,7 +1870,7 @@ local function CreateCategoriesSettingsPanel()
 
     local resetButton = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
     resetButton:SetSize(190, 24)
-    resetButton:SetText("Reset Category to Defaults")
+    resetButton:SetText("Restore Built-in Category")
     resetButton:SetEnabled(Database.CanEditActiveProfile())
     resetButton:SetScript("OnClick", function()
         Database.ResetCategoryToDefaults(selectedCategoryIndex)
@@ -1867,7 +1904,8 @@ local function CreateCategoriesSettingsPanel()
         "{target} - Target's name without the realm.\n" ..
         "{player} - Your character's name without the realm.\n" ..
         "Targeted Command is used only when another unit is targeted.\n" ..
-        "Import replaces this category. The Default profile cannot be edited."
+        "Import replaces this category. Restore uses the addon's built-in category.\n" ..
+        "The Default profile's categories cannot be edited."
     )
     placeholderText:SetTextColor(0.8, 0.8, 0.8)
 
