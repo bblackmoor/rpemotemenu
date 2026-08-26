@@ -236,7 +236,7 @@ addon.DefaultSettings = {
     backgroundOpacity = 1.0,
     windowOpacity = 1.0,
     fadeEnabled = false,
-    fadeDelay = 5,
+    fadeDelay = 15,
     inactiveOpacity = 0.35,
     emoteDataVersion = 5
 }

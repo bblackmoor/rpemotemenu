@@ -50,7 +50,7 @@ local fadeGeneration = 0
 local opacityAnimationGroup
 local opacityAnimation
 local opacityAnimationTarget
-local fadeOutDuration = 0.5
+local fadeOutDuration = 1.0
 local fadeInDuration = 0.2
 local isApplyingColumnSize = false
 local fontRefreshGeneration = 0
