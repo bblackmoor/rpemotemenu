@@ -804,7 +804,6 @@ local function CreateColorSetting(
 end
 
 local function CreateFontSetting(parent, labelText, settingKey, x, y)
-    local selectionGeneration = 0
     local label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     label:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
     label:SetText(labelText)
@@ -819,6 +818,25 @@ local function CreateFontSetting(parent, labelText, settingKey, x, y)
     selector:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y - 21)
     selector.settingKey = settingKey
 
+    local internalText = selector.Text
+    if not internalText and type(selector.GetFontString) == "function" then
+        internalText = selector:GetFontString()
+    end
+    if internalText then
+        internalText:SetAlpha(0)
+    end
+    selector.InternalText = internalText
+
+    selector.PreviewText = selector:CreateFontString(
+        nil,
+        "OVERLAY",
+        "GameFontHighlight"
+    )
+    selector.PreviewText:SetPoint("LEFT", selector, "LEFT", 10, 0)
+    selector.PreviewText:SetPoint("RIGHT", selector, "RIGHT", -30, 0)
+    selector.PreviewText:SetJustifyH("LEFT")
+    selector.PreviewText:SetWordWrap(false)
+
     selector.RefreshValue = function(self)
         local fontName = settings[settingKey]
         local fontSizeKey = settingKey == "categoryFont"
@@ -828,12 +846,11 @@ local function CreateFontSetting(parent, labelText, settingKey, x, y)
             and "categoryTextColor"
             or "emoteTextColor"
         self:OverrideText(fontName)
-
-        local previewText = self.Text
-
-        if not previewText and type(self.GetFontString) == "function" then
-            previewText = self:GetFontString()
+        if self.InternalText then
+            self.InternalText:SetAlpha(0)
         end
+
+        local previewText = self.PreviewText
 
         if previewText and type(previewText.SetFont) == "function" then
             local _, _, previewFlags = previewText:GetFont()
@@ -841,8 +858,16 @@ local function CreateFontSetting(parent, labelText, settingKey, x, y)
             local previewSize = settings[fontSizeKey] or 12
             local previewColor = settings[textColorKey]
 
-            if not previewText:SetFont(fontPath, previewSize, previewFlags or "") then
+            local applied = previewText:SetFont(
+                fontPath, previewSize, previewFlags or ""
+            )
+
+            previewText:SetText(fontName)
+
+            if not applied or previewText:GetStringWidth() <= 0 then
                 previewText:SetFont(STANDARD_TEXT_FONT, previewSize, previewFlags or "")
+                previewText:SetText("")
+                previewText:SetText(fontName)
             end
 
             previewText:SetTextColor(
@@ -851,7 +876,6 @@ local function CreateFontSetting(parent, labelText, settingKey, x, y)
                 previewColor.b,
                 1
             )
-            previewText:SetText(fontName)
         end
     end
 
@@ -863,43 +887,8 @@ local function CreateFontSetting(parent, labelText, settingKey, x, y)
                 fontName,
                 function() return settings[settingKey] == fontName end,
                 function()
-                    selectionGeneration = selectionGeneration + 1
-                    local currentGeneration = selectionGeneration
-
                     settings[settingKey] = fontName
-
-                    local function RefreshSelection()
-                        if selectionGeneration ~= currentGeneration
-                            or settings[settingKey] ~= fontName then
-                            return
-                        end
-
-                        MainWindow.RefreshFontDisplays()
-                    end
-
-                    RefreshSelection()
-                    C_Timer.After(0, RefreshSelection)
-
-                    local isCustomFont = true
-
-                    for _, builtInFont in ipairs(addon.BuiltInFonts) do
-                        if builtInFont.name == fontName then
-                            isCustomFont = false
-                            break
-                        end
-                    end
-
-                    if isCustomFont then
-                        for _, delay in ipairs({
-                            0.25, 0.75, 1.5, 3, 5, 8, 12, 18, 24, 30
-                        }) do
-                            C_Timer.After(delay, function()
-                                if selectionGeneration == currentGeneration then
-                                    MainWindow.RefreshFontDisplays()
-                                end
-                            end)
-                        end
-                    end
+                    MainWindow.ScheduleFontRefreshes()
                 end
             )
         end

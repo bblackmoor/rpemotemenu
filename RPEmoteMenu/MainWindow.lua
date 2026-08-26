@@ -53,6 +53,7 @@ local opacityAnimationTarget
 local fadeOutDuration = 0.5
 local fadeInDuration = 0.2
 local isApplyingColumnSize = false
+local fontRefreshGeneration = 0
 
 local function RefreshGeneralWindowFields()
     if addon.Settings and addon.Settings.RefreshGeneralWindowFields then
@@ -355,6 +356,16 @@ local function ApplyFont(fontString, fontName, size, color, forceRefresh)
         fontString:SetText(currentText)
     end
 
+    if applied
+        and currentText
+        and currentText ~= ""
+        and fontString:GetStringWidth() <= 0 then
+        applied = false
+        fontString:SetFont(STANDARD_TEXT_FONT, size, fontFlags or "")
+        fontString:SetText("")
+        fontString:SetText(currentText)
+    end
+
     fontString:SetTextColor(color.r, color.g, color.b, 1)
     return applied
 end
@@ -437,14 +448,21 @@ function MainWindow.ApplyFadeSettings()
     end
 end
 
-function MainWindow.RefreshFontDisplays()
+function MainWindow.RefreshFontDisplays(updateLayout)
     if not MainFrame then
         return false
     end
 
-    local applied = true
+    local categoryApplied = true
+    local emoteApplied = true
     categoryButtonHeight = math.max(24, settings.categoryFontSize + 10)
     emoteButtonHeight = math.max(20, settings.emoteFontSize + 8)
+
+    -- Build and position every required button before applying fonts. Otherwise
+    -- a newly created final label can miss the pane-wide consistency pass.
+    if updateLayout ~= false then
+        MainWindow.UpdateMenu()
+    end
 
     for _, button in ipairs(categoryButtons) do
         button:SetHeight(categoryButtonHeight)
@@ -459,7 +477,7 @@ function MainWindow.RefreshFontDisplays()
             textColor,
             true
         ) then
-            applied = false
+            categoryApplied = false
         end
 
         for _, outlineText in ipairs(button.TextOutline) do
@@ -470,7 +488,31 @@ function MainWindow.RefreshFontDisplays()
                 settings.categoryHighlightColor,
                 true
             ) then
-                applied = false
+                categoryApplied = false
+            end
+        end
+    end
+
+    if not categoryApplied then
+        for _, button in ipairs(categoryButtons) do
+            local textColor = button.categoryIndex == selectedCategoryIndex
+                and settings.selectedCategoryTextColor
+                or settings.categoryTextColor
+            ApplyFont(
+                button.Text,
+                defaults.categoryFont,
+                settings.categoryFontSize,
+                textColor,
+                true
+            )
+            for _, outlineText in ipairs(button.TextOutline) do
+                ApplyFont(
+                    outlineText,
+                    defaults.categoryFont,
+                    settings.categoryFontSize,
+                    settings.categoryHighlightColor,
+                    true
+                )
             end
         end
     end
@@ -484,21 +526,62 @@ function MainWindow.RefreshFontDisplays()
             settings.emoteTextColor,
             true
         ) then
-            applied = false
+            emoteApplied = false
         end
     end
 
-    MainWindow.UpdateMenu()
+    if not emoteApplied then
+        for _, button in ipairs(buttonsPool) do
+            ApplyFont(
+                button.Text,
+                defaults.emoteFont,
+                settings.emoteFontSize,
+                settings.emoteTextColor,
+                true
+            )
+        end
+    end
+
+    local emoteColor = settings.emoteTextColor
+    if ScrollTopIndicator then
+        ScrollTopIndicator:SetColorTexture(
+            emoteColor.r, emoteColor.g, emoteColor.b, 1
+        )
+    end
+    if ScrollBottomIndicator then
+        ScrollBottomIndicator:SetColorTexture(
+            emoteColor.r, emoteColor.g, emoteColor.b, 1
+        )
+    end
 
     if addon.Settings and addon.Settings.RefreshFontControls then
         addon.Settings.RefreshFontControls()
     end
 
-    return applied
+    return categoryApplied and emoteApplied
 end
 
 function MainWindow.RefreshFont()
     return MainWindow.RefreshFontDisplays()
+end
+
+function MainWindow.ScheduleFontRefreshes(skipImmediateRefresh)
+    fontRefreshGeneration = fontRefreshGeneration + 1
+    local requestedGeneration = fontRefreshGeneration
+
+    if not skipImmediateRefresh then
+        MainWindow.RefreshFontDisplays()
+    end
+
+    for _, delay in ipairs({
+        0, 0.25, 0.75, 1.5, 3, 5, 8, 12, 18, 24, 30
+    }) do
+        C_Timer.After(delay, function()
+            if requestedGeneration == fontRefreshGeneration then
+                MainWindow.RefreshFontDisplays(false)
+            end
+        end)
+    end
 end
 
 function MainWindow.ApplyAppearance()
@@ -645,7 +728,9 @@ function MainWindow.ApplyCategoryHighlight(button, isSelected)
     end
 
     local color = settings.categoryHighlightColor
-    local effect = settings.categoryHighlightEffect
+    local effect = not isSelected and button.isHovered
+        and "background"
+        or settings.categoryHighlightEffect
 
     if effect == "background" then
         button.Selection:SetColorTexture(
@@ -1107,14 +1192,24 @@ function MainWindow.CreateMainWindow()
     ScrollTopIndicator:SetHeight(1)
     ScrollTopIndicator:SetPoint("TOPLEFT", ScrollFrame, "TOPLEFT", 6, -1)
     ScrollTopIndicator:SetPoint("TOPRIGHT", ScrollFrame, "TOPRIGHT", -6, -1)
-    ScrollTopIndicator:SetColorTexture(1.0, 0.82, 0.0, 1.0)
+    ScrollTopIndicator:SetColorTexture(
+        settings.emoteTextColor.r,
+        settings.emoteTextColor.g,
+        settings.emoteTextColor.b,
+        1
+    )
     ScrollTopIndicator:Hide()
 
     ScrollBottomIndicator = MainFrame:CreateTexture(nil, "OVERLAY")
     ScrollBottomIndicator:SetHeight(1)
     ScrollBottomIndicator:SetPoint("BOTTOMLEFT", ScrollFrame, "BOTTOMLEFT", 6, 1)
     ScrollBottomIndicator:SetPoint("BOTTOMRIGHT", ScrollFrame, "BOTTOMRIGHT", -6, 1)
-    ScrollBottomIndicator:SetColorTexture(1.0, 0.82, 0.0, 1.0)
+    ScrollBottomIndicator:SetColorTexture(
+        settings.emoteTextColor.r,
+        settings.emoteTextColor.g,
+        settings.emoteTextColor.b,
+        1
+    )
     ScrollBottomIndicator:Hide()
 
     ScrollFrame:HookScript("OnVerticalScroll", function()
@@ -1207,6 +1302,7 @@ function MainWindow.ApplyProfileSettings()
     isWindowCollapsed = settings.rememberMinimized and settings.minimized or false
     UpdateWindowCollapse()
     MainWindow.UpdateMenu()
+    MainWindow.ScheduleFontRefreshes(true)
 end
 
 function MainWindow.SetSelectedCategory(categoryIndex)
