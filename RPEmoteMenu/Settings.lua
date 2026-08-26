@@ -15,7 +15,7 @@ local generalSettingsCategory
 local appearanceSettingsCategory
 local profilesSettingsCategory
 local categoriesSettingsCategory
-local backupSettingsCategory
+local importExportSettingsCategory
 local resetAllCategoriesButton
 local exchangeDialog
 
@@ -273,15 +273,8 @@ local function GetExchangeDialog()
     function dialog:UpdateActionState()
         if self.mode == "import" then
             local hasText = strtrim(editBox:GetText() or "") ~= ""
-            local canImport
-
-            if self.dataType == "profile" then
-                canImport = Database.ValidateNewProfileName(self.profileName) ~= nil
-            elseif self.dataType == "category" then
-                canImport = Database.CanEditActiveProfile()
-            else
-                canImport = true
-            end
+            local canImport = self.dataType ~= "category"
+                or Database.CanEditActiveProfile()
 
             actionButton:SetEnabled(canImport and hasText)
         else
@@ -312,27 +305,6 @@ local function GetExchangeDialog()
         dialog:Hide()
     end)
 
-    StaticPopupDialogs["RPEMOTEMENU_CONFIRM_DATA_IMPORT"] = {
-        text = "%s",
-        button1 = IMPORT or "Import",
-        button2 = CANCEL or "Cancel",
-        OnAccept = function(_, data)
-            if data and data.confirm then
-                data.confirm()
-            end
-        end,
-        OnShow = function(self, data)
-            local button = self.GetButton1 and self:GetButton1() or self.button1
-            if button and data and data.buttonText then
-                button:SetText(data.buttonText)
-            end
-        end,
-        timeout = 0,
-        whileDead = true,
-        hideOnEscape = true,
-        preferredIndex = 3
-    }
-
     local function PerformImport(importText, dataType)
         dataType = dataType or dialog.dataType
         local success
@@ -340,19 +312,14 @@ local function GetExchangeDialog()
         local sourceProfileName
 
         if dataType == "profile" then
-            success, result, sourceProfileName = Serialization.ImportProfileAsNew(
-                dialog.profileName,
-                importText
-            )
+            success, result, sourceProfileName = Serialization.ImportProfileAsNew(importText)
         elseif dataType == "category" then
             success, result = Serialization.ImportCategory(
                 dialog.categoryIndex,
                 importText
             )
-        elseif dataType == "settings" then
-            success, result = Serialization.ImportSettings(importText)
         else
-            success, result = Serialization.ImportBackup(importText)
+            success, result = Serialization.ImportAllProfiles(importText)
         end
 
         if not success then
@@ -372,11 +339,9 @@ local function GetExchangeDialog()
             SetStatus("Imported profile " .. sourceProfileName .. " as " .. result .. ".")
         elseif dataType == "category" then
             SetStatus("Imported category " .. result .. ".")
-        elseif dataType == "settings" then
-            SetStatus("Imported settings.")
         else
-            local profileLabel = result == 1 and "custom profile" or "custom profiles"
-            SetStatus("Restored settings and " .. result .. " " .. profileLabel .. ".")
+            local profileLabel = result == 1 and "profile" or "profiles"
+            SetStatus("Added " .. result .. " " .. profileLabel .. ".")
         end
     end
 
@@ -388,50 +353,7 @@ local function GetExchangeDialog()
             return
         end
 
-        local importText = editBox:GetText()
-
-        local dataType = dialog.dataType
-
-        if dataType ~= "settings" and dataType ~= "backup" then
-            PerformImport(importText, dataType)
-            return
-        end
-
-        local imported, errorMessage = Serialization.Decode(importText, dataType)
-        if not imported then
-            SetStatus(errorMessage, true)
-            dialog:UpdateActionState()
-            return
-        end
-
-        local prompt
-        local buttonText
-        if dataType == "settings" then
-            prompt = "Import these settings?\n\nThis replaces your general, layout, "
-                .. "and appearance settings. Profiles and emotes will not be changed."
-            buttonText = IMPORT or "Import"
-        else
-            local profileLabel = imported.profileCount == 1
-                and "custom profile"
-                or "custom profiles"
-            prompt = "Restore this complete backup?\n\nThis replaces your settings "
-                .. "and all custom profiles. Existing custom profiles not in the "
-                .. "backup will be deleted.\n\nThe backup contains "
-                .. imported.profileCount .. " " .. profileLabel .. "."
-            buttonText = "Restore"
-        end
-
-        StaticPopup_Show(
-            "RPEMOTEMENU_CONFIRM_DATA_IMPORT",
-            prompt,
-            nil,
-            {
-                buttonText = buttonText,
-                confirm = function()
-                    PerformImport(importText, dataType)
-                end
-            }
-        )
+        PerformImport(editBox:GetText(), dialog.dataType)
     end)
 
     dialog:SetScript("OnHide", function()
@@ -497,7 +419,10 @@ local function GetExchangeDialog()
         self.profileName = nil
         self.onProfileImported = nil
         title:SetText("Export Profile: " .. Database.GetActiveProfileName())
-        instructions:SetText("Copy this JSON to share or save every category and emote in this profile.")
+        instructions:SetText(
+            "Copy this JSON to share or save this profile's window settings, "
+            .. "appearance, categories, and emotes."
+        )
         actionButton:SetText("Select All")
         SetStatus("")
         editBox:SetText(exported)
@@ -510,21 +435,16 @@ local function GetExchangeDialog()
         return true
     end
 
-    function dialog:OpenProfileImport(profileName, onProfileImported)
-        local validName, errorMessage = Database.ValidateNewProfileName(profileName)
-        if not validName then
-            return false, errorMessage
-        end
-
+    function dialog:OpenProfileImport(onProfileImported)
         self.mode = "import"
         self.dataType = "profile"
         self.categoryIndex = nil
-        self.profileName = validName
+        self.profileName = nil
         self.onProfileImported = onProfileImported
-        title:SetText("Import New Profile: " .. validName)
+        title:SetText("Import Profile")
         instructions:SetText(
-            "Paste exported profile JSON below. Importing creates a new profile "
-            .. "without changing the current profile."
+            "Paste exported profile JSON below. Importing adds a new profile without "
+            .. "changing the current profile or any character assignments."
         )
         actionButton:SetText("Import Profile")
         SetStatus("")
@@ -536,33 +456,23 @@ local function GetExchangeDialog()
         return true
     end
 
-    local function OpenDataExport(self, dataType, includeWindowPosition)
-        local exported
-        local errorMessage
-
-        if dataType == "backup" then
-            exported, errorMessage = Serialization.ExportBackup(includeWindowPosition)
-            title:SetText("Export Complete Backup")
-            instructions:SetText(
-                "Copy this JSON to save all settings, custom profiles, and character assignments."
-            )
-        else
-            exported, errorMessage = Serialization.ExportSettings(includeWindowPosition)
-            title:SetText("Export Settings")
-            instructions:SetText(
-                "Copy this JSON to save general, layout, font, color, opacity, and fade settings."
-            )
-        end
+    function dialog:OpenAllProfilesExport()
+        local exported, errorMessage = Serialization.ExportAllProfiles()
 
         if not exported then
             return false, errorMessage
         end
 
         self.mode = "export"
-        self.dataType = dataType
+        self.dataType = "profiles"
         self.categoryIndex = nil
         self.profileName = nil
         self.onProfileImported = nil
+        title:SetText("Export All Profiles")
+        instructions:SetText(
+            "Copy this JSON to save every profile. The addon does not add character "
+            .. "names, realms, or character assignments to the export."
+        )
         actionButton:SetText("Select All")
         SetStatus("")
         editBox:SetText(exported)
@@ -575,27 +485,18 @@ local function GetExchangeDialog()
         return true
     end
 
-    local function OpenDataImport(self, dataType)
+    function dialog:OpenAllProfilesImport()
         self.mode = "import"
-        self.dataType = dataType
+        self.dataType = "profiles"
         self.categoryIndex = nil
         self.profileName = nil
         self.onProfileImported = nil
-
-        if dataType == "backup" then
-            title:SetText("Import Complete Backup")
-            instructions:SetText(
-                "Paste exported backup JSON below. You can review a summary before restoring it."
-            )
-            actionButton:SetText("Review Backup")
-        else
-            title:SetText("Import Settings")
-            instructions:SetText(
-                "Paste exported settings JSON below. Profiles and emotes will not be changed."
-            )
-            actionButton:SetText("Review Settings")
-        end
-
+        title:SetText("Import Profiles")
+        instructions:SetText(
+            "Paste an all-profiles export below. Importing only adds profiles; it "
+            .. "does not replace, activate, or assign them to characters."
+        )
+        actionButton:SetText("Import Profiles")
         SetStatus("")
         editBox:SetText("")
         scrollFrame:SetVerticalScroll(0)
@@ -603,22 +504,6 @@ local function GetExchangeDialog()
         self:Show()
         editBox:SetFocus()
         return true
-    end
-
-    function dialog:OpenBackupExport(includeWindowPosition)
-        return OpenDataExport(self, "backup", includeWindowPosition)
-    end
-
-    function dialog:OpenBackupImport()
-        return OpenDataImport(self, "backup")
-    end
-
-    function dialog:OpenSettingsExport(includeWindowPosition)
-        return OpenDataExport(self, "settings", includeWindowPosition)
-    end
-
-    function dialog:OpenSettingsImport()
-        return OpenDataImport(self, "settings")
     end
 
     exchangeDialog = dialog
@@ -663,8 +548,8 @@ local function CreateAboutPanel()
     description:SetJustifyH("LEFT")
     description:SetText(
         "A customizable roleplaying emote menu with profiles, targeted " ..
-        "commands, category and profile sharing, complete backups, and " ..
-        "adjustable fonts, colors, opacity, and inactivity fading."
+        "commands, category and profile sharing, all-profile exports, and " ..
+        "per-profile fonts, colors, layout, opacity, and inactivity fading."
     )
 
     local details = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -1013,7 +898,7 @@ local function CreateAppearanceSettingsPanel()
     description:SetWidth(620)
     description:SetJustifyH("LEFT")
     description:SetText(
-        "Customize the main menu for every profile. Changes appear immediately."
+        "Customize the main menu for the current profile. Changes appear immediately."
     )
     description:SetTextColor(0.8, 0.8, 0.8)
 
@@ -1396,7 +1281,10 @@ local function CreateGeneralSettingsPanel()
 
     local description = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     description:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -8)
-    description:SetText("Configure window visibility, movement, resizing, and login behavior.")
+    description:SetText(
+        "Configure window visibility, movement, resizing, and login behavior "
+        .. "for the current profile."
+    )
     description:SetTextColor(0.8, 0.8, 0.8)
 
     checkboxes[#checkboxes + 1] = CreateCheckbox(panel, "Lock window movement and resizing", -70,
@@ -1553,109 +1441,68 @@ local function CreateGeneralSettingsPanel()
     return panel
 end
 
-local function CreateBackupSettingsPanel()
+local function CreateImportExportSettingsPanel()
     local panel = CreateFrame("Frame")
-    local includeWindowPosition = false
 
     local heading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     heading:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -16)
-    heading:SetText("Backup & Restore")
+    heading:SetText("Import & Export")
 
     local description = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     description:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -8)
     description:SetWidth(620)
     description:SetJustifyH("LEFT")
     description:SetText(
-        "Save a complete backup or transfer only the addon's global settings. "
-        .. "Category and profile sharing remain on their respective pages."
+        "Save or transfer every profile at once. Individual profiles and categories "
+        .. "can still be shared from their respective pages."
     )
     description:SetTextColor(0.8, 0.8, 0.8)
 
-    local backupHeading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    backupHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -100)
-    backupHeading:SetText("Complete Backup")
+    local profilesHeading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    profilesHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -100)
+    profilesHeading:SetText("All Profiles")
 
-    local backupDescription = panel:CreateFontString(
+    local profilesDescription = panel:CreateFontString(
         nil,
         "OVERLAY",
         "GameFontHighlightSmall"
     )
-    backupDescription:SetPoint("TOPLEFT", backupHeading, "BOTTOMLEFT", 0, -7)
-    backupDescription:SetWidth(620)
-    backupDescription:SetJustifyH("LEFT")
-    backupDescription:SetText(
-        "Includes global settings, every custom profile, and character profile assignments. "
-        .. "Restoring replaces all existing custom profiles."
+    profilesDescription:SetPoint("TOPLEFT", profilesHeading, "BOTTOMLEFT", 0, -7)
+    profilesDescription:SetWidth(620)
+    profilesDescription:SetJustifyH("LEFT")
+    profilesDescription:SetText(
+        "Each profile includes its window settings, appearance, categories, and emotes. "
+        .. "The addon does not add character names, realms, or character assignments."
     )
-    backupDescription:SetTextColor(0.8, 0.8, 0.8)
+    profilesDescription:SetTextColor(0.8, 0.8, 0.8)
 
-    local exportBackupButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    exportBackupButton:SetSize(140, 24)
-    exportBackupButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -166)
-    exportBackupButton:SetText("Export Backup")
-    exportBackupButton:SetScript("OnClick", function()
-        GetExchangeDialog():OpenBackupExport(includeWindowPosition)
+    local exportButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    exportButton:SetSize(160, 24)
+    exportButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -166)
+    exportButton:SetText("Export All Profiles")
+    exportButton:SetScript("OnClick", function()
+        GetExchangeDialog():OpenAllProfilesExport()
     end)
 
-    local importBackupButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    importBackupButton:SetSize(140, 24)
-    importBackupButton:SetPoint("LEFT", exportBackupButton, "RIGHT", 10, 0)
-    importBackupButton:SetText("Import Backup")
-    importBackupButton:SetScript("OnClick", function()
-        GetExchangeDialog():OpenBackupImport()
+    local importButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    importButton:SetSize(160, 24)
+    importButton:SetPoint("LEFT", exportButton, "RIGHT", 10, 0)
+    importButton:SetText("Import Profiles")
+    importButton:SetScript("OnClick", function()
+        GetExchangeDialog():OpenAllProfilesImport()
     end)
 
-    local settingsHeading = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    settingsHeading:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -225)
-    settingsHeading:SetText("Settings Only")
-
-    local settingsDescription = panel:CreateFontString(
-        nil,
-        "OVERLAY",
-        "GameFontHighlightSmall"
+    local importNote = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    importNote:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -214)
+    importNote:SetWidth(620)
+    importNote:SetJustifyH("LEFT")
+    importNote:SetText(
+        "Importing only adds profiles. It does not replace existing profiles, change "
+        .. "the current profile, or assign imported profiles to characters. Name conflicts "
+        .. "are renamed automatically. Review profile names and custom emote text before "
+        .. "sharing, since those are exported exactly as written."
     )
-    settingsDescription:SetPoint("TOPLEFT", settingsHeading, "BOTTOMLEFT", 0, -7)
-    settingsDescription:SetWidth(620)
-    settingsDescription:SetJustifyH("LEFT")
-    settingsDescription:SetText(
-        "Includes general behavior, window dimensions, fonts, colors, opacity, and fading. "
-        .. "Profiles and emotes are not included."
-    )
-    settingsDescription:SetTextColor(0.8, 0.8, 0.8)
-
-    local exportSettingsButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    exportSettingsButton:SetSize(140, 24)
-    exportSettingsButton:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -291)
-    exportSettingsButton:SetText("Export Settings")
-    exportSettingsButton:SetScript("OnClick", function()
-        GetExchangeDialog():OpenSettingsExport(includeWindowPosition)
-    end)
-
-    local importSettingsButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    importSettingsButton:SetSize(140, 24)
-    importSettingsButton:SetPoint("LEFT", exportSettingsButton, "RIGHT", 10, 0)
-    importSettingsButton:SetText("Import Settings")
-    importSettingsButton:SetScript("OnClick", function()
-        GetExchangeDialog():OpenSettingsImport()
-    end)
-
-    CreateCheckbox(
-        panel,
-        "Include the current window position in exports",
-        -345,
-        function() return includeWindowPosition end,
-        function(value) includeWindowPosition = value end
-    )
-
-    local positionNote = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    positionNote:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -382)
-    positionNote:SetWidth(620)
-    positionNote:SetJustifyH("LEFT")
-    positionNote:SetText(
-        "Window position is excluded by default so importing on a different display "
-        .. "cannot place the menu off-screen. Imported positions are always clamped to the screen."
-    )
-    positionNote:SetTextColor(0.7, 0.7, 0.7)
+    importNote:SetTextColor(0.7, 0.7, 0.7)
 
     return panel
 end
@@ -1673,7 +1520,8 @@ local function CreateProfilesSettingsPanel()
     description:SetJustifyH("LEFT")
     description:SetText(
         "Choose a profile for this character, create or copy an editable profile, " ..
-        "or import a new one. The Default profile cannot be edited, renamed, or deleted."
+        "or import a new one. Default's settings are customizable, but its categories " ..
+        "cannot be edited and the profile cannot be renamed or deleted."
     )
     description:SetTextColor(0.8, 0.8, 0.8)
 
@@ -1718,7 +1566,7 @@ local function CreateProfilesSettingsPanel()
         copyButton:SetEnabled(validNewProfileName ~= nil)
         renameButton:SetEnabled(editable)
         deleteButton:SetEnabled(editable)
-        importProfileButton:SetEnabled(validNewProfileName ~= nil)
+        importProfileButton:SetEnabled(true)
     end
 
     local function SetStatus(message, isError)
@@ -1906,14 +1754,10 @@ local function CreateProfilesSettingsPanel()
 
     importProfileButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     importProfileButton:SetSize(125, 24)
-    importProfileButton:SetPoint("LEFT", nameInput, "RIGHT", 12, 0)
+    importProfileButton:SetPoint("LEFT", exportProfileButton, "RIGHT", 8, 0)
     importProfileButton:SetText("Import Profile")
-    importProfileButton:SetEnabled(false)
     importProfileButton:SetScript("OnClick", function()
-        GetExchangeDialog():OpenProfileImport(nameInput:GetText(), function()
-            nameInput:SetText("")
-            UpdateButtonState()
-        end)
+        GetExchangeDialog():OpenProfileImport(UpdateButtonState)
     end)
 
     nameInput:SetScript("OnTextChanged", function(_, userInput)
@@ -2164,7 +2008,7 @@ function AddonSettings.CreateSettingsPanel()
     local appearancePanel = CreateAppearanceSettingsPanel()
     local profilesPanel = CreateProfilesSettingsPanel()
     local categoriesPanel = CreateCategoriesSettingsPanel()
-    local backupPanel = CreateBackupSettingsPanel()
+    local importExportPanel = CreateImportExportSettingsPanel()
 
     settingsCategory = Settings.RegisterCanvasLayoutCategory(aboutPanel, "RP Emote Menu")
     Settings.RegisterAddOnCategory(settingsCategory)
@@ -2195,17 +2039,18 @@ function AddonSettings.CreateSettingsPanel()
         "Categories"
     )
 
-    backupSettingsCategory = Settings.RegisterCanvasLayoutSubcategory(
+    importExportSettingsCategory = Settings.RegisterCanvasLayoutSubcategory(
         settingsCategory,
-        backupPanel,
-        "Backup & Restore"
+        importExportPanel,
+        "Import & Export"
     )
 
     AddonSettings.RefreshSettingsPanels = function()
+        settings = Database.GetSettings()
         generalPanel.RefreshControls()
         appearancePanel.RefreshControls()
         profilesPanel.Refresh()
-        categoriesPanel.RefreshEditors()
+        categoriesPanel.SelectCategory(settings.selectedCategory)
     end
 
     AddonSettings.RefreshEditors = function(categoryIndex)

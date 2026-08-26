@@ -1060,6 +1060,27 @@ function MainWindow.CreateMainWindow()
         SaveWindowSize()
     end)
 
+    MainFrame:HookScript("OnEnter", MainWindow.NotifyActivity)
+    MainFrame:HookScript("OnLeave", ScheduleInactiveFade)
+
+    MainWindow.ApplyProfileSettings()
+
+    if settings.showAtLogin then
+        MainFrame:Show()
+    else
+        MainFrame:Hide()
+    end
+end
+
+function MainWindow.ApplyProfileSettings()
+    settings = Database.GetSettings()
+    selectedCategoryIndex = settings.selectedCategory
+    sidebarWidth = settings.sidebarWidth
+
+    if not MainFrame then
+        return
+    end
+
     -- Restore size first so legacy non-TOPLEFT anchors can be converted accurately.
     RestoreWindowSize()
     RestoreWindowPosition()
@@ -1068,22 +1089,9 @@ function MainWindow.CreateMainWindow()
     MainWindow.ApplySettingsGearVisibility()
     MainWindow.ApplyAppearance()
 
-    MainFrame:HookScript("OnEnter", MainWindow.NotifyActivity)
-    MainFrame:HookScript("OnLeave", ScheduleInactiveFade)
-
-    if settings.rememberMinimized then
-        isWindowCollapsed = settings.minimized
-    else
-        isWindowCollapsed = false
-    end
-
+    isWindowCollapsed = settings.rememberMinimized and settings.minimized or false
     UpdateWindowCollapse()
-
-    if settings.showAtLogin then
-        MainFrame:Show()
-    else
-        MainFrame:Hide()
-    end
+    MainWindow.UpdateMenu()
 end
 
 function MainWindow.SetSelectedCategory(categoryIndex)

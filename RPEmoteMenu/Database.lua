@@ -7,20 +7,17 @@ local defaultSections = addon.DefaultSections
 local defaults = addon.DefaultSettings
 local MAX_CATEGORIES = addon.MAX_CATEGORIES
 local MAX_EMOTES = addon.MAX_EMOTES
-local SCHEMA_VERSION = 3
+local SCHEMA_VERSION = 4
 local DEFAULT_PROFILE_NAME = "Default"
 local MAX_PROFILE_NAME_LENGTH = 64
+
 local VALID_CATEGORY_HIGHLIGHT_EFFECTS = {
     background = true,
     outline = true,
     underline = true,
     shadow = true
 }
-local VALID_BORDER_STYLES = {
-    none = true,
-    thin = true,
-    blizzard = true
-}
+local VALID_BORDER_STYLES = {none = true, thin = true, blizzard = true}
 local VALID_ANCHOR_POINTS = {
     TOPLEFT = true,
     TOP = true,
@@ -31,6 +28,14 @@ local VALID_ANCHOR_POINTS = {
     BOTTOMLEFT = true,
     BOTTOM = true,
     BOTTOMRIGHT = true
+}
+local COLOR_SETTING_KEYS = {
+    "categoryTextColor",
+    "selectedCategoryTextColor",
+    "emoteTextColor",
+    "categoryHighlightColor",
+    "backgroundColor",
+    "borderColor"
 }
 
 local function NormalizeString(value)
@@ -60,6 +65,7 @@ local function CopyDefaultCategories()
 
     return categories
 end
+
 
 local function NormalizeCategories(categories)
     categories = type(categories) == "table" and categories or {}
@@ -92,8 +98,10 @@ local function NormalizeCategories(categories)
     return categories
 end
 
+
 local function CopyCategories(sourceCategories)
     local categories = {}
+    sourceCategories = type(sourceCategories) == "table" and sourceCategories or {}
 
     for categoryIndex = 1, MAX_CATEGORIES do
         local sourceCategory = sourceCategories[categoryIndex]
@@ -120,6 +128,7 @@ local function CopyCategories(sourceCategories)
     return categories
 end
 
+
 local function IsValidSavedValue(value, defaultValue)
     if type(value) ~= type(defaultValue) then
         return false
@@ -132,6 +141,7 @@ local function IsValidSavedValue(value, defaultValue)
     return true
 end
 
+
 local function ClampNumber(value, minimum, maximum, defaultValue)
     value = tonumber(value)
 
@@ -141,6 +151,7 @@ local function ClampNumber(value, minimum, maximum, defaultValue)
 
     return math.max(minimum, math.min(maximum, value))
 end
+
 
 local function NormalizeColor(value, defaultValue)
     value = type(value) == "table" and value or {}
@@ -152,9 +163,96 @@ local function NormalizeColor(value, defaultValue)
     }
 end
 
-function Database.GetSettings()
-    return RPEmoteMenuDB
+
+local function NormalizeSettings(source)
+    source = type(source) == "table" and source or {}
+    local result = {}
+
+    for key, defaultValue in pairs(defaults) do
+        if key ~= "emoteDataVersion" and type(defaultValue) ~= "table" then
+            result[key] = IsValidSavedValue(source[key], defaultValue)
+                and source[key]
+                or defaultValue
+        end
+    end
+
+    result.width = math.floor(ClampNumber(source.width, 250, 600, defaults.width))
+    result.height = math.floor(ClampNumber(source.height, 150, 600, defaults.height))
+    result.x = math.floor(ClampNumber(source.x, -100000, 100000, defaults.x))
+    result.y = math.floor(ClampNumber(source.y, -100000, 100000, defaults.y))
+
+    if not VALID_ANCHOR_POINTS[result.point] then
+        result.point = defaults.point
+    end
+    if not VALID_ANCHOR_POINTS[result.relativePoint] then
+        result.relativePoint = defaults.relativePoint
+    end
+    if result.selectedCategory % 1 ~= 0
+        or result.selectedCategory < 1
+        or result.selectedCategory > MAX_CATEGORIES then
+        result.selectedCategory = defaults.selectedCategory
+    end
+
+    result.sidebarWidth = math.floor(ClampNumber(
+        source.sidebarWidth,
+        addon.MIN_SIDEBAR_WIDTH,
+        addon.MAX_SIDEBAR_WIDTH,
+        defaults.sidebarWidth
+    ))
+
+    if strtrim(result.categoryFont) == "" then
+        result.categoryFont = defaults.categoryFont
+    end
+    if strtrim(result.emoteFont) == "" then
+        result.emoteFont = defaults.emoteFont
+    end
+
+    result.categoryFontSize = math.floor(ClampNumber(
+        source.categoryFontSize, 8, 24, defaults.categoryFontSize
+    ))
+    result.emoteFontSize = math.floor(ClampNumber(
+        source.emoteFontSize, 8, 24, defaults.emoteFontSize
+    ))
+    result.categoryHighlightThickness = math.floor(ClampNumber(
+        source.categoryHighlightThickness,
+        1,
+        6,
+        defaults.categoryHighlightThickness
+    ))
+
+    for _, key in ipairs(COLOR_SETTING_KEYS) do
+        result[key] = NormalizeColor(source[key], defaults[key])
+    end
+
+    if not VALID_CATEGORY_HIGHLIGHT_EFFECTS[result.categoryHighlightEffect] then
+        result.categoryHighlightEffect = defaults.categoryHighlightEffect
+    end
+    if not VALID_BORDER_STYLES[result.borderStyle] then
+        result.borderStyle = defaults.borderStyle
+    end
+
+    result.backgroundOpacity = ClampNumber(
+        source.backgroundOpacity, 0, 1, defaults.backgroundOpacity
+    )
+    result.windowOpacity = ClampNumber(
+        source.windowOpacity, 0.1, 1, defaults.windowOpacity
+    )
+    result.fadeDelay = math.floor(ClampNumber(
+        source.fadeDelay, 0, 60, defaults.fadeDelay
+    ))
+    result.inactiveOpacity = math.min(
+        ClampNumber(source.inactiveOpacity, 0.1, 1, defaults.inactiveOpacity),
+        result.windowOpacity
+    )
+
+    return result
 end
+
+
+local function CopySettings(source)
+    return NormalizeSettings(source)
+end
+
 
 function Database.GetCharacterKey()
     local name, realm = UnitName("player")
@@ -174,6 +272,7 @@ function Database.GetCharacterKey()
     return name
 end
 
+
 function Database.GetActiveProfileName()
     local characterKey = Database.GetCharacterKey()
     local profileName = characterKey and RPEmoteMenuDB.activeProfiles[characterKey]
@@ -190,25 +289,51 @@ function Database.GetActiveProfileName()
     return profileName
 end
 
+
 function Database.GetActiveProfile()
     return RPEmoteMenuDB.profiles[Database.GetActiveProfileName()]
 end
+
+
+function Database.GetProfile(profileName)
+    return RPEmoteMenuDB.profiles[profileName]
+end
+
+
+function Database.GetProfiles()
+    return RPEmoteMenuDB.profiles
+end
+
+
+function Database.GetSettings()
+    return Database.GetActiveProfile().settings
+end
+
+
+function Database.CopySettings(source)
+    return CopySettings(source)
+end
+
 
 function Database.IsDefaultProfile()
     return Database.GetActiveProfileName() == DEFAULT_PROFILE_NAME
 end
 
+
 function Database.CanEditActiveProfile()
     return not Database.IsDefaultProfile()
 end
+
 
 function Database.GetCategories()
     return Database.GetActiveProfile().categories
 end
 
+
 function Database.GetCategory(categoryIndex)
     return Database.GetCategories()[categoryIndex]
 end
+
 
 local function FindProfileByName(profileName)
     local requestedName = string.lower(profileName)
@@ -222,6 +347,7 @@ local function FindProfileByName(profileName)
     return nil
 end
 
+
 local function ValidateNewProfileName(profileName, existingProfileName)
     if type(profileName) ~= "string" then
         return nil, "Enter a profile name."
@@ -232,11 +358,9 @@ local function ValidateNewProfileName(profileName, existingProfileName)
     if profileName == "" then
         return nil, "Enter a profile name."
     end
-
     if #profileName > MAX_PROFILE_NAME_LENGTH then
         return nil, "Profile names cannot exceed 64 characters."
     end
-
     if string.lower(profileName) == string.lower(DEFAULT_PROFILE_NAME) then
         return nil, "Default is reserved and cannot be changed."
     end
@@ -245,7 +369,6 @@ local function ValidateNewProfileName(profileName, existingProfileName)
     if matchingProfile and matchingProfile ~= existingProfileName then
         return nil, "A profile with that name already exists."
     end
-
     if matchingProfile == existingProfileName and profileName == existingProfileName then
         return nil, "Enter a different profile name."
     end
@@ -253,27 +376,31 @@ local function ValidateNewProfileName(profileName, existingProfileName)
     return profileName
 end
 
+
 function Database.ValidateNewProfileName(profileName, existingProfileName)
     return ValidateNewProfileName(profileName, existingProfileName)
 end
 
-local function RefreshProfileViews()
-    if addon.MainWindow and addon.MainWindow.SetSelectedCategory then
-        addon.MainWindow.SetSelectedCategory(1)
-    end
 
-    if addon.MainWindow and addon.MainWindow.UpdateMenu then
+local function RefreshProfileViews()
+    if addon.MainWindow and addon.MainWindow.ApplyProfileSettings then
+        addon.MainWindow.ApplyProfileSettings()
+    elseif addon.MainWindow and addon.MainWindow.UpdateMenu then
         addon.MainWindow.UpdateMenu()
     end
 
-    if addon.Settings and addon.Settings.RefreshEditors then
-        addon.Settings.RefreshEditors()
-    end
-
-    if addon.Settings and addon.Settings.RefreshProfiles then
-        addon.Settings.RefreshProfiles()
+    if addon.Settings and addon.Settings.RefreshSettingsPanels then
+        addon.Settings.RefreshSettingsPanels()
+    else
+        if addon.Settings and addon.Settings.RefreshEditors then
+            addon.Settings.RefreshEditors()
+        end
+        if addon.Settings and addon.Settings.RefreshProfiles then
+            addon.Settings.RefreshProfiles()
+        end
     end
 end
+
 
 function Database.GetProfileNames()
     local names = {}
@@ -286,23 +413,18 @@ function Database.GetProfileNames()
         if first == DEFAULT_PROFILE_NAME then
             return true
         end
-
         if second == DEFAULT_PROFILE_NAME then
             return false
         end
 
         local firstLower = string.lower(first)
         local secondLower = string.lower(second)
-
-        if firstLower == secondLower then
-            return first < second
-        end
-
-        return firstLower < secondLower
+        return firstLower == secondLower and first < second or firstLower < secondLower
     end)
 
     return names
 end
+
 
 function Database.SetActiveProfile(profileName)
     if type(profileName) ~= "string"
@@ -320,7 +442,8 @@ function Database.SetActiveProfile(profileName)
     return true
 end
 
-function Database.CreateProfile(profileName, sourceCategories)
+
+function Database.CreateProfile(profileName, sourceCategories, sourceSettings)
     local validName, errorMessage = ValidateNewProfileName(profileName)
     if not validName then
         return false, errorMessage
@@ -331,16 +454,22 @@ function Database.CreateProfile(profileName, sourceCategories)
         return false, "Your character is not available yet."
     end
 
+    local settingsSource = type(sourceSettings) == "table"
+        and sourceSettings
+        or Database.GetSettings()
+
     RPEmoteMenuDB.profiles[validName] = {
         categories = type(sourceCategories) == "table"
             and CopyCategories(sourceCategories)
-            or CopyDefaultCategories()
+            or CopyDefaultCategories(),
+        settings = CopySettings(settingsSource)
     }
     RPEmoteMenuDB.activeProfiles[characterKey] = validName
 
     RefreshProfileViews()
     return true, validName
 end
+
 
 function Database.CopyProfile(sourceProfileName, newProfileName)
     local source = RPEmoteMenuDB.profiles[sourceProfileName]
@@ -348,24 +477,9 @@ function Database.CopyProfile(sourceProfileName, newProfileName)
         return false, "The source profile does not exist."
     end
 
-    local validName, errorMessage = ValidateNewProfileName(newProfileName)
-    if not validName then
-        return false, errorMessage
-    end
-
-    local characterKey = Database.GetCharacterKey()
-    if not characterKey then
-        return false, "Your character is not available yet."
-    end
-
-    RPEmoteMenuDB.profiles[validName] = {
-        categories = CopyCategories(source.categories)
-    }
-    RPEmoteMenuDB.activeProfiles[characterKey] = validName
-
-    RefreshProfileViews()
-    return true, validName
+    return Database.CreateProfile(newProfileName, source.categories, source.settings)
 end
+
 
 function Database.RenameProfile(oldProfileName, newProfileName)
     if oldProfileName == DEFAULT_PROFILE_NAME then
@@ -395,11 +509,11 @@ function Database.RenameProfile(oldProfileName, newProfileName)
     return true, validName
 end
 
+
 function Database.DeleteProfile(profileName)
     if profileName == DEFAULT_PROFILE_NAME then
         return false, "The Default profile cannot be deleted."
     end
-
     if type(RPEmoteMenuDB.profiles[profileName]) ~= "table" then
         return false, "That profile does not exist."
     end
@@ -416,156 +530,57 @@ function Database.DeleteProfile(profileName)
     return true
 end
 
-function Database.ReplaceCustomProfiles(customProfiles, activeProfiles)
-    local defaultProfile = RPEmoteMenuDB.profiles[DEFAULT_PROFILE_NAME]
-    local profiles = {
-        [DEFAULT_PROFILE_NAME] = defaultProfile
-    }
 
-    for profileName, categories in pairs(customProfiles or {}) do
-        profiles[profileName] = {
-            categories = CopyCategories(categories)
-        }
+local function ImportedProfileName(sourceName)
+    local baseName = strtrim(sourceName or "")
+    if baseName == "" then
+        baseName = "Imported Profile"
     end
 
-    local restoredActiveProfiles = {}
-    for characterKey, profileName in pairs(activeProfiles or {}) do
-        if profileName == DEFAULT_PROFILE_NAME or profiles[profileName] then
-            restoredActiveProfiles[characterKey] = profileName
+    if string.lower(baseName) ~= string.lower(DEFAULT_PROFILE_NAME)
+        and not FindProfileByName(baseName) then
+        return baseName
+    end
+
+    local number = 1
+    while true do
+        local suffix = number == 1
+            and " (Imported)"
+            or " (Imported " .. number .. ")"
+        local shortenedBase = strtrim(baseName:sub(1, MAX_PROFILE_NAME_LENGTH - #suffix))
+        local candidate = shortenedBase .. suffix
+
+        if not FindProfileByName(candidate) then
+            return candidate
         end
-    end
 
-    local characterKey = Database.GetCharacterKey()
-    if characterKey and not restoredActiveProfiles[characterKey] then
-        restoredActiveProfiles[characterKey] = DEFAULT_PROFILE_NAME
+        number = number + 1
     end
-
-    RPEmoteMenuDB.profiles = profiles
-    RPEmoteMenuDB.activeProfiles = restoredActiveProfiles
-    RefreshProfileViews()
 end
+
+
+function Database.AddImportedProfiles(importedProfiles)
+    local fallbackSettings = CopySettings(Database.GetSettings())
+    local createdNames = {}
+
+    for _, imported in ipairs(importedProfiles or {}) do
+        local profileName = ImportedProfileName(imported.name)
+        RPEmoteMenuDB.profiles[profileName] = {
+            categories = CopyCategories(imported.categories),
+            settings = CopySettings(imported.settings or fallbackSettings)
+        }
+        createdNames[#createdNames + 1] = profileName
+    end
+
+    RefreshProfileViews()
+    return createdNames
+end
+
 
 function Database.InitializeDatabase()
     RPEmoteMenuDB = type(RPEmoteMenuDB) == "table" and RPEmoteMenuDB or {}
 
-    for key, defaultValue in pairs(defaults) do
-        if key ~= "emoteDataVersion"
-            and not IsValidSavedValue(RPEmoteMenuDB[key], defaultValue) then
-            RPEmoteMenuDB[key] = defaultValue
-        end
-    end
-
-    if not VALID_ANCHOR_POINTS[RPEmoteMenuDB.point] then
-        RPEmoteMenuDB.point = defaults.point
-    end
-
-    if not VALID_ANCHOR_POINTS[RPEmoteMenuDB.relativePoint] then
-        RPEmoteMenuDB.relativePoint = defaults.relativePoint
-    end
-
-    if RPEmoteMenuDB.selectedCategory % 1 ~= 0
-        or RPEmoteMenuDB.selectedCategory < 1
-        or RPEmoteMenuDB.selectedCategory > MAX_CATEGORIES then
-        RPEmoteMenuDB.selectedCategory = defaults.selectedCategory
-    end
-
-    RPEmoteMenuDB.sidebarWidth = math.floor(ClampNumber(
-        RPEmoteMenuDB.sidebarWidth,
-        addon.MIN_SIDEBAR_WIDTH,
-        addon.MAX_SIDEBAR_WIDTH,
-        defaults.sidebarWidth
-    ))
-
-    if strtrim(RPEmoteMenuDB.categoryFont) == "" then
-        RPEmoteMenuDB.categoryFont = defaults.categoryFont
-    end
-
-    if strtrim(RPEmoteMenuDB.emoteFont) == "" then
-        RPEmoteMenuDB.emoteFont = defaults.emoteFont
-    end
-
-    RPEmoteMenuDB.categoryFontSize = math.floor(ClampNumber(
-        RPEmoteMenuDB.categoryFontSize,
-        8,
-        24,
-        defaults.categoryFontSize
-    ))
-    RPEmoteMenuDB.emoteFontSize = math.floor(ClampNumber(
-        RPEmoteMenuDB.emoteFontSize,
-        8,
-        24,
-        defaults.emoteFontSize
-    ))
-    RPEmoteMenuDB.categoryHighlightThickness = math.floor(ClampNumber(
-        RPEmoteMenuDB.categoryHighlightThickness,
-        1,
-        6,
-        defaults.categoryHighlightThickness
-    ))
-    RPEmoteMenuDB.categoryTextColor = NormalizeColor(
-        RPEmoteMenuDB.categoryTextColor,
-        defaults.categoryTextColor
-    )
-    RPEmoteMenuDB.selectedCategoryTextColor = NormalizeColor(
-        RPEmoteMenuDB.selectedCategoryTextColor,
-        defaults.selectedCategoryTextColor
-    )
-    RPEmoteMenuDB.emoteTextColor = NormalizeColor(
-        RPEmoteMenuDB.emoteTextColor,
-        defaults.emoteTextColor
-    )
-    RPEmoteMenuDB.categoryHighlightColor = NormalizeColor(
-        RPEmoteMenuDB.categoryHighlightColor,
-        defaults.categoryHighlightColor
-    )
-    RPEmoteMenuDB.backgroundColor = NormalizeColor(
-        RPEmoteMenuDB.backgroundColor,
-        defaults.backgroundColor
-    )
-    RPEmoteMenuDB.borderColor = NormalizeColor(
-        RPEmoteMenuDB.borderColor,
-        defaults.borderColor
-    )
-
-    if not VALID_CATEGORY_HIGHLIGHT_EFFECTS[RPEmoteMenuDB.categoryHighlightEffect] then
-        RPEmoteMenuDB.categoryHighlightEffect = defaults.categoryHighlightEffect
-    end
-
-    if not VALID_BORDER_STYLES[RPEmoteMenuDB.borderStyle] then
-        RPEmoteMenuDB.borderStyle = defaults.borderStyle
-    end
-
-    RPEmoteMenuDB.backgroundOpacity = ClampNumber(
-        RPEmoteMenuDB.backgroundOpacity,
-        0,
-        1,
-        defaults.backgroundOpacity
-    )
-    RPEmoteMenuDB.windowOpacity = ClampNumber(
-        RPEmoteMenuDB.windowOpacity,
-        0.1,
-        1,
-        defaults.windowOpacity
-    )
-    RPEmoteMenuDB.fadeDelay = math.floor(ClampNumber(
-        RPEmoteMenuDB.fadeDelay,
-        0,
-        60,
-        defaults.fadeDelay
-    ))
-    RPEmoteMenuDB.inactiveOpacity = math.min(
-        ClampNumber(
-            RPEmoteMenuDB.inactiveOpacity,
-            0.1,
-            1,
-            defaults.inactiveOpacity
-        ),
-        RPEmoteMenuDB.windowOpacity
-    )
-
-    -- Legacy pre-profile categories are intentionally discarded. Existing valid
-    -- named profiles remain available, and Default is rebuilt every login so it
-    -- always reflects the categories currently supplied by the addon.
+    local legacySettings = NormalizeSettings(RPEmoteMenuDB)
     RPEmoteMenuDB.categories = nil
     RPEmoteMenuDB.profiles = type(RPEmoteMenuDB.profiles) == "table"
         and RPEmoteMenuDB.profiles
@@ -573,6 +588,11 @@ function Database.InitializeDatabase()
     RPEmoteMenuDB.activeProfiles = type(RPEmoteMenuDB.activeProfiles) == "table"
         and RPEmoteMenuDB.activeProfiles
         or {}
+
+    local existingDefault = RPEmoteMenuDB.profiles[DEFAULT_PROFILE_NAME]
+    local defaultSettings = existingDefault and existingDefault.settings
+        and NormalizeSettings(existingDefault.settings)
+        or CopySettings(legacySettings)
 
     local invalidProfiles = {}
     for profileName, profile in pairs(RPEmoteMenuDB.profiles) do
@@ -584,6 +604,9 @@ function Database.InitializeDatabase()
             profile.categories = type(profile.categories) == "table"
                 and NormalizeCategories(profile.categories)
                 or CopyDefaultCategories()
+            profile.settings = type(profile.settings) == "table"
+                and NormalizeSettings(profile.settings)
+                or CopySettings(legacySettings)
         end
     end
 
@@ -593,10 +616,17 @@ function Database.InitializeDatabase()
 
     RPEmoteMenuDB.defaultCategories = CopyDefaultCategories()
     RPEmoteMenuDB.profiles[DEFAULT_PROFILE_NAME] = {
-        categories = CopyDefaultCategories()
+        categories = CopyDefaultCategories(),
+        settings = defaultSettings
     }
     RPEmoteMenuDB.emoteDataVersion = defaults.emoteDataVersion
     RPEmoteMenuDB.schemaVersion = SCHEMA_VERSION
+
+    for key in pairs(defaults) do
+        if key ~= "emoteDataVersion" then
+            RPEmoteMenuDB[key] = nil
+        end
+    end
 
     local invalidCharacterKeys = {}
     for characterKey, profileName in pairs(RPEmoteMenuDB.activeProfiles) do
@@ -618,13 +648,13 @@ function Database.InitializeDatabase()
     end
 end
 
+
 function Database.ResetCategoryToDefaults(categoryIndex)
     if not Database.CanEditActiveProfile() then
         return false
     end
 
-    local suppliedDefaults = CopyDefaultCategories()
-    Database.GetCategories()[categoryIndex] = suppliedDefaults[categoryIndex]
+    Database.GetCategories()[categoryIndex] = CopyDefaultCategories()[categoryIndex]
 
     if addon.Settings.RefreshEditors then
         addon.Settings.RefreshEditors(categoryIndex)
@@ -633,6 +663,7 @@ function Database.ResetCategoryToDefaults(categoryIndex)
     addon.MainWindow.UpdateMenu()
     return true
 end
+
 
 function Database.ResetAllCategoriesToDefaults()
     if not Database.CanEditActiveProfile() then

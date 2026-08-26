@@ -6,26 +6,32 @@ addon.Serialization = Serialization
 local Database = addon.Database
 local JSON = addon.JSON
 local FORMAT_NAME = "RPEmoteMenu"
-local FORMAT_VERSION = 1
-local DEFAULT_PROFILE_NAME = "Default"
+local FORMAT_VERSION = 2
+local LEGACY_FORMAT_VERSION = 1
 local MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
 local MAX_PROFILE_NAME_LENGTH = 64
 local MAX_CATEGORY_NAME_LENGTH = 128
 local MAX_LABEL_LENGTH = 128
 local MAX_COMMAND_LENGTH = 4096
 local MAX_FONT_NAME_LENGTH = 128
-local MAX_CHARACTER_KEY_LENGTH = 256
 
 local CATEGORY_DOCUMENT_FIELDS = {
     format = true, version = true, type = true, name = true, emotes = true
 }
 local PROFILE_DOCUMENT_FIELDS = {
-    format = true, version = true, type = true, name = true, categories = true
+    format = true,
+    version = true,
+    type = true,
+    name = true,
+    settings = true,
+    categories = true
 }
-local SETTINGS_DOCUMENT_FIELDS = {
-    format = true, version = true, type = true, settings = true
+local PROFILE_FIELDS = {name = true, settings = true, categories = true}
+local LEGACY_PROFILE_FIELDS = {name = true, categories = true}
+local PROFILES_DOCUMENT_FIELDS = {
+    format = true, version = true, type = true, profiles = true
 }
-local BACKUP_DOCUMENT_FIELDS = {
+local LEGACY_BACKUP_FIELDS = {
     format = true,
     version = true,
     type = true,
@@ -33,15 +39,18 @@ local BACKUP_DOCUMENT_FIELDS = {
     profiles = true,
     activeProfiles = true
 }
-local PROFILE_FIELDS = {name = true, categories = true}
 local CATEGORY_FIELDS = {name = true, emotes = true}
 local EMOTE_FIELDS = {label = true, defaultCommand = true, targetedCommand = true}
 
-local SETTINGS_FIELDS = {
+local PROFILE_SETTINGS_FIELDS = {
     locked = true,
     hideSettingsGear = true,
     showAtLogin = true,
     rememberMinimized = true,
+    point = true,
+    relativePoint = true,
+    x = true,
+    y = true,
     width = true,
     height = true,
     sidebarWidth = true,
@@ -62,10 +71,14 @@ local SETTINGS_FIELDS = {
     windowOpacity = true,
     fadeEnabled = true,
     fadeDelay = true,
-    inactiveOpacity = true,
-    x = true,
-    y = true
+    inactiveOpacity = true
 }
+local LEGACY_SETTINGS_FIELDS = {}
+for key in pairs(PROFILE_SETTINGS_FIELDS) do
+    if key ~= "point" and key ~= "relativePoint" then
+        LEGACY_SETTINGS_FIELDS[key] = true
+    end
+end
 
 local BOOLEAN_SETTING_KEYS = {
     "locked",
@@ -74,7 +87,6 @@ local BOOLEAN_SETTING_KEYS = {
     "rememberMinimized",
     "fadeEnabled"
 }
-
 local COLOR_SETTING_KEYS = {
     "categoryTextColor",
     "selectedCategoryTextColor",
@@ -83,11 +95,21 @@ local COLOR_SETTING_KEYS = {
     "backgroundColor",
     "borderColor"
 }
-
 local VALID_CATEGORY_HIGHLIGHT_EFFECTS = {
     background = true, outline = true, underline = true, shadow = true
 }
 local VALID_BORDER_STYLES = {none = true, thin = true, blizzard = true}
+local VALID_ANCHOR_POINTS = {
+    TOPLEFT = true,
+    TOP = true,
+    TOPRIGHT = true,
+    LEFT = true,
+    CENTER = true,
+    RIGHT = true,
+    BOTTOMLEFT = true,
+    BOTTOM = true,
+    BOTTOMRIGHT = true
+}
 
 local function ValidateObject(value, allowedFields, description)
     if type(value) ~= "table" or JSON.IsArray(value) or value == JSON.Null then
@@ -103,6 +125,7 @@ local function ValidateObject(value, allowedFields, description)
     return true
 end
 
+
 local function ValidateString(value, maximumLength, description)
     if type(value) ~= "string" then
         return nil, description .. " must be a string."
@@ -113,12 +136,14 @@ local function ValidateString(value, maximumLength, description)
     return value
 end
 
+
 local function ValidateBoolean(value, description)
     if type(value) ~= "boolean" then
         return nil, description .. " must be true or false."
     end
     return value
 end
+
 
 local function ValidateNumber(value, minimum, maximum, description, integer)
     if type(value) ~= "number"
@@ -136,11 +161,10 @@ local function ValidateNumber(value, minimum, maximum, description, integer)
     return value
 end
 
+
 local function ValidateColor(value, description)
     local valid, errorMessage = ValidateObject(
-        value,
-        {r = true, g = true, b = true},
-        description
+        value, {r = true, g = true, b = true}, description
     )
     if not valid then
         return nil, errorMessage
@@ -159,13 +183,16 @@ local function ValidateColor(value, description)
     return color
 end
 
+
 local function CopyColor(value)
     return {r = value.r, g = value.g, b = value.b}
 end
 
+
 local function BlankEmote()
     return {label = "", defaultCommand = "", targetedCommand = ""}
 end
+
 
 local function ValidateEmote(value, index, prefix)
     local description = (prefix or "Emote") .. " " .. index
@@ -211,11 +238,10 @@ local function ValidateEmote(value, index, prefix)
     }
 end
 
+
 local function ValidateCategory(value, description, allowedFields)
     local valid, errorMessage = ValidateObject(
-        value,
-        allowedFields or CATEGORY_FIELDS,
-        description
+        value, allowedFields or CATEGORY_FIELDS, description
     )
     if not valid then
         return nil, errorMessage
@@ -226,7 +252,6 @@ local function ValidateCategory(value, description, allowedFields)
     if not name then
         return nil, errorMessage
     end
-
     if not JSON.IsArray(value.emotes) then
         return nil, description .. " emotes must be an array."
     end
@@ -252,6 +277,7 @@ local function ValidateCategory(value, description, allowedFields)
 
     return category
 end
+
 
 local function ValidateCategories(value, description)
     if not JSON.IsArray(value) then
@@ -284,36 +310,10 @@ local function ValidateCategories(value, description)
     return categories
 end
 
-local function ValidateProfile(value, description, allowedFields)
-    local valid, errorMessage = ValidateObject(
-        value, allowedFields or PROFILE_FIELDS, description
-    )
-    if not valid then
-        return nil, errorMessage
-    end
 
-    local profileName
-    profileName, errorMessage = ValidateString(
-        value.name, MAX_PROFILE_NAME_LENGTH, description .. " name"
-    )
-    if not profileName then
-        return nil, errorMessage
-    end
-    if profileName == "" then
-        return nil, description .. " name cannot be empty."
-    end
-
-    local categories
-    categories, errorMessage = ValidateCategories(value.categories, description)
-    if not categories then
-        return nil, errorMessage
-    end
-
-    return {name = profileName, categories = categories}
-end
-
-local function ValidateSettings(value)
-    local valid, errorMessage = ValidateObject(value, SETTINGS_FIELDS, "Settings")
+local function ValidateProfileSettings(value, legacy)
+    local fields = legacy and LEGACY_SETTINGS_FIELDS or PROFILE_SETTINGS_FIELDS
+    local valid, errorMessage = ValidateObject(value, fields, "Profile settings")
     if not valid then
         return nil, errorMessage
     end
@@ -321,9 +321,36 @@ local function ValidateSettings(value)
     local imported = {}
     for _, key in ipairs(BOOLEAN_SETTING_KEYS) do
         imported[key], errorMessage = ValidateBoolean(value[key], "Setting " .. key)
-        if imported[key] == nil then
-            return nil, errorMessage
+        if imported[key] == nil then return nil, errorMessage end
+    end
+
+    if not legacy then
+        if not VALID_ANCHOR_POINTS[value.point] then
+            return nil, "Setting point is not supported."
         end
+        if not VALID_ANCHOR_POINTS[value.relativePoint] then
+            return nil, "Setting relativePoint is not supported."
+        end
+        imported.point = value.point
+        imported.relativePoint = value.relativePoint
+    end
+
+    local positionPresent = value.x ~= nil or value.y ~= nil
+    if positionPresent and (value.x == nil or value.y == nil) then
+        return nil, "Window position must contain both x and y."
+    end
+    if not legacy and not positionPresent then
+        return nil, "Profile settings must contain a window position."
+    end
+    if positionPresent then
+        imported.x, errorMessage = ValidateNumber(
+            value.x, -100000, 100000, "Window position x", true
+        )
+        if imported.x == nil then return nil, errorMessage end
+        imported.y, errorMessage = ValidateNumber(
+            value.y, -100000, 100000, "Window position y", true
+        )
+        if imported.y == nil then return nil, errorMessage end
     end
 
     imported.width, errorMessage = ValidateNumber(value.width, 250, 600, "Window width", true)
@@ -343,9 +370,7 @@ local function ValidateSettings(value)
         imported[key], errorMessage = ValidateString(
             value[key], MAX_FONT_NAME_LENGTH, "Setting " .. key
         )
-        if not imported[key] then
-            return nil, errorMessage
-        end
+        if not imported[key] then return nil, errorMessage end
         if imported[key] == "" then
             return nil, "Setting " .. key .. " cannot be empty."
         end
@@ -362,9 +387,7 @@ local function ValidateSettings(value)
 
     for _, key in ipairs(COLOR_SETTING_KEYS) do
         imported[key], errorMessage = ValidateColor(value[key], "Setting " .. key)
-        if not imported[key] then
-            return nil, errorMessage
-        end
+        if not imported[key] then return nil, errorMessage end
     end
 
     if not VALID_CATEGORY_HIGHLIGHT_EFFECTS[value.categoryHighlightEffect] then
@@ -401,22 +424,49 @@ local function ValidateSettings(value)
         return nil, "Inactive opacity cannot exceed active window opacity."
     end
 
-    if (value.x == nil) ~= (value.y == nil) then
-        return nil, "Window position must contain both x and y."
+    local base = Database.CopySettings(Database.GetSettings())
+    for key, settingValue in pairs(imported) do
+        base[key] = settingValue
     end
-    if value.x ~= nil then
-        imported.x, errorMessage = ValidateNumber(
-            value.x, -100000, 100000, "Window position x", true
-        )
-        if imported.x == nil then return nil, errorMessage end
-        imported.y, errorMessage = ValidateNumber(
-            value.y, -100000, 100000, "Window position y", true
-        )
-        if imported.y == nil then return nil, errorMessage end
+    base.selectedCategory = addon.DefaultSettings.selectedCategory
+    base.minimized = addon.DefaultSettings.minimized
+
+    return Database.CopySettings(base)
+end
+
+
+local function ValidateProfile(value, description, allowedFields, settingsRequired)
+    local valid, errorMessage = ValidateObject(value, allowedFields, description)
+    if not valid then return nil, errorMessage end
+
+    local profileName
+    profileName, errorMessage = ValidateString(
+        value.name, MAX_PROFILE_NAME_LENGTH, description .. " name"
+    )
+    if not profileName then return nil, errorMessage end
+    if profileName == "" then
+        return nil, description .. " name cannot be empty."
     end
 
-    return imported
+    local categories
+    categories, errorMessage = ValidateCategories(value.categories, description)
+    if not categories then return nil, errorMessage end
+
+    local profileSettings
+    if value.settings ~= nil then
+        profileSettings, errorMessage = ValidateProfileSettings(value.settings, false)
+        if not profileSettings then return nil, errorMessage end
+    elseif settingsRequired then
+        return nil, description .. " settings are missing."
+    end
+
+    return {
+        name = profileName,
+        settings = profileSettings,
+        categories = categories
+    }
 end
+
 
 local function ExportCategoryData(category)
     local emotes = JSON.Array()
@@ -442,23 +492,15 @@ local function ExportCategoryData(category)
     return {name = category.name, emotes = emotes}
 end
 
-local function ExportProfileData(profileName, categories)
-    local exportedCategories = JSON.Array()
-    for index = 1, addon.MAX_CATEGORIES do
-        exportedCategories[index] = ExportCategoryData(categories[index])
-    end
-    return {name = profileName, categories = exportedCategories}
-end
 
-local function ExportSettingsData(includeWindowPosition)
-    local source = Database.GetSettings()
+local function ExportProfileSettings(source)
     local exported = {}
 
     for _, key in ipairs(BOOLEAN_SETTING_KEYS) do
         exported[key] = source[key]
     end
     for _, key in ipairs({
-        "width", "height", "sidebarWidth",
+        "point", "relativePoint", "x", "y", "width", "height", "sidebarWidth",
         "categoryFont", "emoteFont", "categoryFontSize", "emoteFontSize",
         "categoryHighlightEffect", "categoryHighlightThickness", "borderStyle",
         "backgroundOpacity", "windowOpacity", "fadeDelay", "inactiveOpacity"
@@ -468,13 +510,24 @@ local function ExportSettingsData(includeWindowPosition)
     for _, key in ipairs(COLOR_SETTING_KEYS) do
         exported[key] = CopyColor(source[key])
     end
-    if includeWindowPosition then
-        exported.x = source.x
-        exported.y = source.y
-    end
 
     return exported
 end
+
+
+local function ExportProfileData(profileName, profile)
+    local categories = JSON.Array()
+    for index = 1, addon.MAX_CATEGORIES do
+        categories[index] = ExportCategoryData(profile.categories[index])
+    end
+
+    return {
+        name = profileName,
+        settings = ExportProfileSettings(profile.settings),
+        categories = categories
+    }
+end
+
 
 local function IsValidCategoryIndex(categoryIndex)
     return type(categoryIndex) == "number"
@@ -483,31 +536,46 @@ local function IsValidCategoryIndex(categoryIndex)
         and categoryIndex <= addon.MAX_CATEGORIES
 end
 
-local function ApplyImportedSettings(imported)
-    local destination = Database.GetSettings()
-    for key, value in pairs(imported) do
-        destination[key] = type(value) == "table" and CopyColor(value) or value
+
+local function ValidateProfileArray(value, description, legacy, legacySettings)
+    if not JSON.IsArray(value) then
+        return nil, description .. " must be an array."
     end
 
-    if addon.MainWindow and addon.MainWindow.GetFrame
-        and addon.MainWindow.GetFrame() then
-        addon.MainWindow.ApplyWindowGeometry(
-            destination.x, destination.y, destination.width, destination.height
+    local profiles = {}
+    local profileNames = {}
+    local errorMessage
+    for index, sourceProfile in ipairs(value) do
+        local profile
+        profile, errorMessage = ValidateProfile(
+            sourceProfile,
+            "Profile " .. index,
+            legacy and LEGACY_PROFILE_FIELDS or PROFILE_FIELDS,
+            not legacy
         )
-        addon.MainWindow.ApplySidebarWidth(destination.sidebarWidth)
-        addon.MainWindow.ApplyMovementLock()
-        addon.MainWindow.ApplySettingsGearVisibility()
-        addon.MainWindow.ApplyAppearance()
+        if not profile then return nil, errorMessage end
+
+        local normalizedName = string.lower(profile.name)
+        if profileNames[normalizedName] then
+            return nil, "The import contains more than one profile named " .. profile.name .. "."
+        end
+        profileNames[normalizedName] = true
+
+        if not profile.settings and legacySettings then
+            profile.settings = Database.CopySettings(legacySettings)
+        end
+        profiles[#profiles + 1] = profile
     end
-    if addon.Settings and addon.Settings.RefreshSettingsPanels then
-        addon.Settings.RefreshSettingsPanels()
-    end
+
+    return profiles
 end
+
 
 function Serialization.ExportCategory(categoryIndex)
     if not IsValidCategoryIndex(categoryIndex) then
         return nil, "Choose a valid category to export."
     end
+
     local result = ExportCategoryData(Database.GetCategory(categoryIndex))
     result.format = FORMAT_NAME
     result.version = FORMAT_VERSION
@@ -515,60 +583,34 @@ function Serialization.ExportCategory(categoryIndex)
     return JSON.Encode(result, true)
 end
 
+
 function Serialization.ExportProfile()
-    local result = ExportProfileData(
-        Database.GetActiveProfileName(), Database.GetCategories()
-    )
+    local profileName = Database.GetActiveProfileName()
+    local result = ExportProfileData(profileName, Database.GetProfile(profileName))
     result.format = FORMAT_NAME
     result.version = FORMAT_VERSION
     result.type = "profile"
     return JSON.Encode(result, true)
 end
 
-function Serialization.ExportSettings(includeWindowPosition)
-    return JSON.Encode({
-        format = FORMAT_NAME,
-        version = FORMAT_VERSION,
-        type = "settings",
-        settings = ExportSettingsData(includeWindowPosition == true)
-    }, true)
-end
 
-function Serialization.ExportBackup(includeWindowPosition)
-    local database = Database.GetSettings()
-    local profileNames = {}
-    for profileName in pairs(database.profiles) do
-        if profileName ~= DEFAULT_PROFILE_NAME then
-            profileNames[#profileNames + 1] = profileName
-        end
-    end
-    table.sort(profileNames, function(first, second)
-        return string.lower(first) < string.lower(second)
-    end)
-
+function Serialization.ExportAllProfiles()
     local profiles = JSON.Array()
-    for index, profileName in ipairs(profileNames) do
+    for index, profileName in ipairs(Database.GetProfileNames()) do
         profiles[index] = ExportProfileData(
-            profileName, database.profiles[profileName].categories
+            profileName,
+            Database.GetProfile(profileName)
         )
     end
 
-    local activeProfiles = {}
-    for characterKey, profileName in pairs(database.activeProfiles) do
-        if profileName == DEFAULT_PROFILE_NAME or database.profiles[profileName] then
-            activeProfiles[characterKey] = profileName
-        end
-    end
-
     return JSON.Encode({
         format = FORMAT_NAME,
         version = FORMAT_VERSION,
-        type = "backup",
-        settings = ExportSettingsData(includeWindowPosition == true),
-        profiles = profiles,
-        activeProfiles = activeProfiles
+        type = "profiles",
+        profiles = profiles
     }, true)
 end
+
 
 function Serialization.Decode(text, expectedType)
     if type(text) ~= "string" or text == "" then
@@ -588,114 +630,80 @@ function Serialization.Decode(text, expectedType)
     if value.format ~= FORMAT_NAME then
         return nil, "This data was not exported by RP Emote Menu."
     end
-    if value.version ~= FORMAT_VERSION then
+    if value.version ~= FORMAT_VERSION and value.version ~= LEGACY_FORMAT_VERSION then
         return nil, "This import format version is not supported."
     end
-    if value.type ~= "category"
-        and value.type ~= "profile"
-        and value.type ~= "settings"
-        and value.type ~= "backup" then
+
+    local actualType = value.type == "backup" and "profiles" or value.type
+    if actualType ~= "category" and actualType ~= "profile" and actualType ~= "profiles" then
         return nil, "The import data has an unsupported type."
     end
-    if expectedType and value.type ~= expectedType then
-        return nil, "This is " .. value.type .. " data, not " .. expectedType .. " data."
+    if expectedType and actualType ~= expectedType then
+        return nil, "This is " .. actualType .. " data, not " .. expectedType .. " data."
     end
 
-    local valid
-    if value.type == "category" then
+    if actualType == "category" then
+        local valid
+        valid, errorMessage = ValidateObject(value, CATEGORY_DOCUMENT_FIELDS, "Import data")
+        if not valid then return nil, errorMessage end
+
         local category
-        category, errorMessage = ValidateCategory(
-            value, "Category", CATEGORY_DOCUMENT_FIELDS
-        )
+        category, errorMessage = ValidateCategory(value, "Category", CATEGORY_DOCUMENT_FIELDS)
         if not category then return nil, errorMessage end
         return {type = "category", name = category.name, category = category}
     end
 
-    if value.type == "profile" then
+    if actualType == "profile" then
         local profile
         profile, errorMessage = ValidateProfile(
-            value, "Profile", PROFILE_DOCUMENT_FIELDS
+            value,
+            "Profile",
+            PROFILE_DOCUMENT_FIELDS,
+            value.version == FORMAT_VERSION
         )
         if not profile then return nil, errorMessage end
         profile.type = "profile"
         return profile
     end
 
-    if value.type == "settings" then
-        valid, errorMessage = ValidateObject(
-            value, SETTINGS_DOCUMENT_FIELDS, "Import data"
-        )
+    if value.type == "backup" then
+        local valid
+        valid, errorMessage = ValidateObject(value, LEGACY_BACKUP_FIELDS, "Import data")
         if not valid then return nil, errorMessage end
+        if value.version ~= LEGACY_FORMAT_VERSION then
+            return nil, "This legacy backup version is not supported."
+        end
 
-        local importedSettings
-        importedSettings, errorMessage = ValidateSettings(value.settings)
-        if not importedSettings then return nil, errorMessage end
-        return {type = "settings", settings = importedSettings}
-    end
+        local legacySettings
+        legacySettings, errorMessage = ValidateProfileSettings(value.settings, true)
+        if not legacySettings then return nil, errorMessage end
 
-    valid, errorMessage = ValidateObject(
-        value, BACKUP_DOCUMENT_FIELDS, "Import data"
-    )
-    if not valid then return nil, errorMessage end
-
-    local importedSettings
-    importedSettings, errorMessage = ValidateSettings(value.settings)
-    if not importedSettings then return nil, errorMessage end
-    if not JSON.IsArray(value.profiles) then
-        return nil, "Backup profiles must be an array."
-    end
-
-    local profiles = {}
-    local profileNames = {}
-    for index, sourceProfile in ipairs(value.profiles) do
-        local profile
-        profile, errorMessage = ValidateProfile(
-            sourceProfile, "Backup profile " .. index
+        local profiles
+        profiles, errorMessage = ValidateProfileArray(
+            value.profiles,
+            "Backup profiles",
+            true,
+            legacySettings
         )
-        if not profile then return nil, errorMessage end
-        if string.lower(profile.name) == string.lower(DEFAULT_PROFILE_NAME) then
-            return nil, "The built-in Default profile cannot be imported from a backup."
-        end
-
-        local normalizedName = string.lower(profile.name)
-        if profileNames[normalizedName] then
-            return nil, "The backup contains more than one profile named " .. profile.name .. "."
-        end
-        profileNames[normalizedName] = true
-        profiles[profile.name] = profile.categories
+        if not profiles then return nil, errorMessage end
+        return {type = "profiles", profiles = profiles, profileCount = #profiles}
     end
 
-    if type(value.activeProfiles) ~= "table"
-        or JSON.IsArray(value.activeProfiles)
-        or value.activeProfiles == JSON.Null then
-        return nil, "Backup character assignments must be an object."
+    local valid
+    valid, errorMessage = ValidateObject(value, PROFILES_DOCUMENT_FIELDS, "Import data")
+    if not valid then return nil, errorMessage end
+    if value.version ~= FORMAT_VERSION then
+        return nil, "This all-profiles export version is not supported."
     end
 
-    local activeProfiles = {}
-    for characterKey, profileName in pairs(value.activeProfiles) do
-        if type(characterKey) ~= "string"
-            or characterKey == ""
-            or #characterKey > MAX_CHARACTER_KEY_LENGTH then
-            return nil, "Backup character assignments contain an invalid character name."
-        end
-        if type(profileName) ~= "string" then
-            return nil, "The profile assigned to " .. characterKey .. " must be a string."
-        end
-        if profileName ~= DEFAULT_PROFILE_NAME and not profiles[profileName] then
-            return nil, "Character " .. characterKey
-                .. " is assigned to a profile that is not in the backup."
-        end
-        activeProfiles[characterKey] = profileName
-    end
-
-    return {
-        type = "backup",
-        settings = importedSettings,
-        profiles = profiles,
-        activeProfiles = activeProfiles,
-        profileCount = #value.profiles
-    }
+    local profiles
+    profiles, errorMessage = ValidateProfileArray(
+        value.profiles, "Profiles", false
+    )
+    if not profiles then return nil, errorMessage end
+    return {type = "profiles", profiles = profiles, profileCount = #profiles}
 end
+
 
 function Serialization.ImportCategory(categoryIndex, text)
     if not Database.CanEditActiveProfile() then
@@ -707,6 +715,7 @@ function Serialization.ImportCategory(categoryIndex, text)
 
     local imported, errorMessage = Serialization.Decode(text, "category")
     if not imported then return false, errorMessage end
+
     Database.GetCategories()[categoryIndex] = imported.category
     if addon.Settings and addon.Settings.RefreshEditors then
         addon.Settings.RefreshEditors(categoryIndex)
@@ -717,50 +726,20 @@ function Serialization.ImportCategory(categoryIndex, text)
     return true, imported.name
 end
 
-function Serialization.ImportProfile(text)
-    if not Database.CanEditActiveProfile() then
-        return false, "The Default profile cannot receive imports."
-    end
+
+function Serialization.ImportProfileAsNew(text)
     local imported, errorMessage = Serialization.Decode(text, "profile")
     if not imported then return false, errorMessage end
 
-    Database.GetActiveProfile().categories = imported.categories
-    if addon.Settings and addon.Settings.RefreshEditors then
-        addon.Settings.RefreshEditors()
-    end
-    if addon.MainWindow and addon.MainWindow.SetSelectedCategory then
-        addon.MainWindow.SetSelectedCategory(1)
-    end
-    if addon.MainWindow and addon.MainWindow.UpdateMenu then
-        addon.MainWindow.UpdateMenu()
-    end
-    return true, imported.name
+    local names = Database.AddImportedProfiles({imported})
+    return true, names[1], imported.name
 end
 
-function Serialization.ImportProfileAsNew(profileName, text)
-    local validName, errorMessage = Database.ValidateNewProfileName(profileName)
-    if not validName then return false, errorMessage end
 
-    local imported
-    imported, errorMessage = Serialization.Decode(text, "profile")
+function Serialization.ImportAllProfiles(text)
+    local imported, errorMessage = Serialization.Decode(text, "profiles")
     if not imported then return false, errorMessage end
 
-    local success, createdName = Database.CreateProfile(validName, imported.categories)
-    if not success then return false, createdName end
-    return true, createdName, imported.name
-end
-
-function Serialization.ImportSettings(text)
-    local imported, errorMessage = Serialization.Decode(text, "settings")
-    if not imported then return false, errorMessage end
-    ApplyImportedSettings(imported.settings)
-    return true
-end
-
-function Serialization.ImportBackup(text)
-    local imported, errorMessage = Serialization.Decode(text, "backup")
-    if not imported then return false, errorMessage end
-    Database.ReplaceCustomProfiles(imported.profiles, imported.activeProfiles)
-    ApplyImportedSettings(imported.settings)
-    return true, imported.profileCount
+    local names = Database.AddImportedProfiles(imported.profiles)
+    return true, #names, names
 end
